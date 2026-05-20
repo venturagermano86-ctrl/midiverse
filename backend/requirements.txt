@@ -1,0 +1,11 @@
+# MIDIVERSE Backend — FastAPI + coda job
+-r ../requirements.txt
+-r ../requirements-ml.txt
+
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9
+celery[redis]>=5.3
+redis>=5.0
+pydantic-settings>=2.2
+aiofiles>=23.2

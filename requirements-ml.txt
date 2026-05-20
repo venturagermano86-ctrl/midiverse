@@ -1,0 +1,10 @@
+# MIDIVERSE — separazione stem e modelli neurali
+-r requirements.txt
+torch>=2.0
+torchaudio>=2.0
+demucs>=4.0
+
+# Opzionale — AudioLDM-2 / hybrid
+# diffusers>=0.27
+# transformers>=4.38
+# accelerate>=0.27

@@ -1,0 +1,8 @@
+{
+  "bpm_reference": 117.45383522727273,
+  "bpm_output_estimated": 120.18531976744185,
+  "bpm_drift_ratio": 0.02325581395348826,
+  "harmony_correlation": 0.9845004878050104,
+  "beats_reference": 8,
+  "beats_output": 8
+}

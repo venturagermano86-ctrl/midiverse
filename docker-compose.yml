@@ -1,0 +1,108 @@
+# MIDIVERSE — stack full-stack
+# Servizi: Redis (broker) → API FastAPI + Worker Celery (stessa immagine) + Frontend Next.js
+
+name: midiverse
+
+services:
+  # ---------------------------------------------------------------------------
+  # Redis — message broker Celery + stato job (fase 2)
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: midiverse-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
+    networks:
+      - midiverse
+
+  # ---------------------------------------------------------------------------
+  # API — FastAPI (uvicorn)
+  # ---------------------------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: midiverse-api
+    ports:
+      - "8000:8000"
+    environment:
+      PYTHONPATH: /app
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    volumes:
+      - midiverse_data:/tmp/midiverse
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(''http://127.0.0.1:8000/health'')"',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - midiverse
+
+  # ---------------------------------------------------------------------------
+  # Worker — Celery (stessa immagine dell'API, comando diverso)
+  # ---------------------------------------------------------------------------
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: midiverse-worker
+    command: celery -A backend.app.workers.celery_app worker --loglevel=info --concurrency=1
+    environment:
+      PYTHONPATH: /app
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/1
+    volumes:
+      - midiverse_data:/tmp/midiverse
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    networks:
+      - midiverse
+
+  # ---------------------------------------------------------------------------
+  # Frontend — Next.js (chiama l'API sull'host locale dal browser)
+  # ---------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: midiverse-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - midiverse
+
+networks:
+  midiverse:
+    driver: bridge
+
+volumes:
+  redis_data:
+  midiverse_data:

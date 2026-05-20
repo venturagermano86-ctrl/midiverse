@@ -1,0 +1,13 @@
+.venv
+node_modules
+frontend/node_modules
+frontend/.next
+__pycache__
+*.pyc
+.git
+*.wav
+*.mp3
+reference_test.wav
+output_*.wav
+structural_lock.json
+audio_template.json
