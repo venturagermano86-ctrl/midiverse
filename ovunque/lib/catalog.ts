@@ -1,0 +1,396 @@
+import type { Offer, Track } from "./types";
+
+function offer(
+  storeId: Offer["storeId"],
+  priceEur: number,
+  format: string,
+  slug: string,
+): Offer {
+  const paths: Record<Offer["storeId"], string> = {
+    beatport: `https://www.beatport.com/track/${slug}`,
+    bandcamp: `https://bandcamp.com/track/${slug}`,
+    traxsource: `https://www.traxsource.com/track/${slug}`,
+    juno: `https://www.junodownload.com/${slug}`,
+    whatpeopleplay: `https://www.whatpeopleplay.com/track/${slug}`,
+    boomkat: `https://boomkat.com/products/${slug}`,
+    apple: `https://music.apple.com/track/${slug}`,
+    amazon: `https://www.amazon.com/dp/${slug}`,
+  };
+  return {
+    storeId,
+    priceEur,
+    currency: "EUR",
+    format,
+    url: paths[storeId],
+  };
+}
+
+/** Catalogo demo — prezzi e disponibilità di esempio per confrontare i portali. */
+export const TRACKS: Track[] = [
+  {
+    id: "hold-the-mark",
+    title: "Hold The Mark",
+    artist: "Germano Ventura",
+    label: "Closed Edition",
+    genre: "House",
+    bpm: 124,
+    key: "Am",
+    year: 2025,
+    mood: "club warm",
+    coverHue: 28,
+    suggested: true,
+    rails: ["per-te", "house", "sotto-2"],
+    offers: [
+      offer("beatport", 1.79, "WAV", "hold-the-mark"),
+      offer("traxsource", 1.59, "WAV", "hold-the-mark"),
+      offer("juno", 1.49, "MP3 / WAV", "hold-the-mark"),
+      offer("bandcamp", 1.29, "FLAC / MP3", "hold-the-mark"),
+    ],
+  },
+  {
+    id: "spin-the-gate",
+    title: "Spin The Gate",
+    artist: "Germano Ventura",
+    label: "Closed Edition",
+    genre: "House",
+    bpm: 123,
+    key: "F#m",
+    year: 2025,
+    mood: "rolling",
+    coverHue: 195,
+    suggested: true,
+    rails: ["per-te", "house"],
+    offers: [
+      offer("beatport", 1.99, "WAV", "spin-the-gate"),
+      offer("traxsource", 1.79, "WAV", "spin-the-gate"),
+      offer("whatpeopleplay", 1.69, "WAV", "spin-the-gate"),
+      offer("bandcamp", 2.0, "FLAC", "spin-the-gate"),
+    ],
+  },
+  {
+    id: "midnight-relay",
+    title: "Midnight Relay",
+    artist: "Lumen Quay",
+    label: "North Dock",
+    genre: "Deep House",
+    bpm: 120,
+    key: "Dm",
+    year: 2024,
+    mood: "late night",
+    coverHue: 210,
+    suggested: true,
+    rails: ["per-te", "deep", "novita"],
+    offers: [
+      offer("beatport", 2.29, "WAV", "midnight-relay"),
+      offer("bandcamp", 1.5, "FLAC / MP3", "midnight-relay"),
+      offer("boomkat", 1.8, "MP3 / WAV", "midnight-relay"),
+    ],
+  },
+  {
+    id: "glass-corridor",
+    title: "Glass Corridor",
+    artist: "Ara & Vale",
+    label: "Soft Signal",
+    genre: "Techno",
+    bpm: 132,
+    key: "Em",
+    year: 2025,
+    mood: "hypnotic",
+    coverHue: 265,
+    suggested: true,
+    rails: ["per-te", "techno", "novita"],
+    offers: [
+      offer("beatport", 2.49, "WAV", "glass-corridor"),
+      offer("juno", 2.19, "WAV", "glass-corridor"),
+      offer("traxsource", 2.29, "WAV", "glass-corridor"),
+      offer("whatpeopleplay", 2.09, "WAV", "glass-corridor"),
+      offer("amazon", 1.99, "MP3", "glass-corridor"),
+    ],
+  },
+  {
+    id: "only-on-bandcamp",
+    title: "Tape Warmth 03",
+    artist: "Studio Mare",
+    label: "Self-released",
+    genre: "Ambient",
+    bpm: 90,
+    year: 2023,
+    mood: "soft fog",
+    coverHue: 160,
+    suggested: true,
+    rails: ["per-te", "ambient", "esclusive"],
+    offers: [offer("bandcamp", 3.0, "FLAC / ALAC", "tape-warmth-03")],
+  },
+  {
+    id: "beatport-exclusive",
+    title: "Peak Hour Knife",
+    artist: "Kade Noir",
+    label: "Main Floor",
+    genre: "Techno",
+    bpm: 138,
+    key: "Gm",
+    year: 2025,
+    mood: "peak",
+    coverHue: 350,
+    suggested: true,
+    rails: ["techno", "novita", "esclusive"],
+    offers: [offer("beatport", 2.49, "WAV", "peak-hour-knife")],
+  },
+  {
+    id: "salt-line",
+    title: "Salt Line",
+    artist: "Mira Coast",
+    label: "Harbour Press",
+    genre: "Disco",
+    bpm: 118,
+    key: "C",
+    year: 2024,
+    mood: "sunlit",
+    coverHue: 40,
+    suggested: true,
+    rails: ["per-te", "disco", "sotto-2"],
+    offers: [
+      offer("bandcamp", 1.0, "MP3 / FLAC", "salt-line"),
+      offer("juno", 1.29, "MP3", "salt-line"),
+      offer("apple", 1.29, "AAC", "salt-line"),
+      offer("amazon", 1.19, "MP3", "salt-line"),
+      offer("beatport", 1.79, "WAV", "salt-line"),
+    ],
+  },
+  {
+    id: "low-voltage",
+    title: "Low Voltage",
+    artist: "Grid Signal",
+    label: "Substation",
+    genre: "Electro",
+    bpm: 128,
+    year: 2025,
+    mood: "voltage",
+    coverHue: 185,
+    suggested: false,
+    rails: ["electro", "novita"],
+    offers: [
+      offer("beatport", 1.89, "WAV", "low-voltage"),
+      offer("traxsource", 1.69, "WAV", "low-voltage"),
+      offer("juno", 1.59, "WAV", "low-voltage"),
+    ],
+  },
+  {
+    id: "river-cut",
+    title: "River Cut",
+    artist: "Nilo Pale",
+    label: "Delta Room",
+    genre: "House",
+    bpm: 122,
+    key: "Bm",
+    year: 2024,
+    mood: "liquid",
+    coverHue: 175,
+    suggested: true,
+    rails: ["house", "per-te"],
+    offers: [
+      offer("traxsource", 1.49, "WAV", "river-cut"),
+      offer("beatport", 1.79, "WAV", "river-cut"),
+      offer("bandcamp", 1.5, "FLAC", "river-cut"),
+      offer("whatpeopleplay", 1.39, "WAV", "river-cut"),
+    ],
+  },
+  {
+    id: "chrome-prayer",
+    title: "Chrome Prayer",
+    artist: "Vesper Unit",
+    label: "Cold Chapel",
+    genre: "IDM",
+    year: 2022,
+    mood: "fragile",
+    coverHue: 220,
+    suggested: false,
+    rails: ["ambient", "esclusive"],
+    offers: [
+      offer("boomkat", 2.5, "WAV / MP3", "chrome-prayer"),
+      offer("bandcamp", 2.0, "FLAC", "chrome-prayer"),
+    ],
+  },
+  {
+    id: "open-roof",
+    title: "Open Roof",
+    artist: "Solara Duo",
+    label: "Terrace Works",
+    genre: "Afro House",
+    bpm: 120,
+    year: 2025,
+    mood: "open air",
+    coverHue: 15,
+    suggested: true,
+    rails: ["per-te", "house", "novita"],
+    offers: [
+      offer("beatport", 2.29, "WAV", "open-roof"),
+      offer("traxsource", 1.99, "WAV", "open-roof"),
+      offer("juno", 1.89, "WAV", "open-roof"),
+      offer("apple", 1.29, "AAC", "open-roof"),
+    ],
+  },
+  {
+    id: "static-kiss",
+    title: "Static Kiss",
+    artist: "Neon Fold",
+    label: "Soft Crash",
+    genre: "Synthwave",
+    bpm: 110,
+    year: 2023,
+    mood: "neon dusk",
+    coverHue: 300,
+    suggested: false,
+    rails: ["novita"],
+    offers: [
+      offer("bandcamp", 1.5, "FLAC / MP3", "static-kiss"),
+      offer("amazon", 1.29, "MP3", "static-kiss"),
+      offer("apple", 1.29, "AAC", "static-kiss"),
+    ],
+  },
+  {
+    id: "dry-ice",
+    title: "Dry Ice",
+    artist: "Parcel Nine",
+    label: "Cold Room",
+    genre: "Minimal",
+    bpm: 126,
+    year: 2025,
+    mood: "spare",
+    coverHue: 200,
+    suggested: true,
+    rails: ["techno", "per-te", "sotto-2"],
+    offers: [
+      offer("beatport", 1.49, "WAV", "dry-ice"),
+      offer("juno", 1.19, "WAV", "dry-ice"),
+      offer("whatpeopleplay", 1.29, "WAV", "dry-ice"),
+    ],
+  },
+  {
+    id: "velvet-runway",
+    title: "Velvet Runway",
+    artist: "Clio Maré",
+    label: "Silk Dock",
+    genre: "Nu Disco",
+    bpm: 116,
+    year: 2024,
+    mood: "gloss",
+    coverHue: 330,
+    suggested: true,
+    rails: ["disco", "per-te"],
+    offers: [
+      offer("beatport", 1.99, "WAV", "velvet-runway"),
+      offer("bandcamp", 2.5, "FLAC", "velvet-runway"),
+      offer("traxsource", 1.79, "WAV", "velvet-runway"),
+      offer("juno", 1.69, "MP3 / WAV", "velvet-runway"),
+      offer("amazon", 1.49, "MP3", "velvet-runway"),
+    ],
+  },
+  {
+    id: "harbour-bell",
+    title: "Harbour Bell",
+    artist: "East Pier",
+    label: "Fog Press",
+    genre: "Deep House",
+    bpm: 119,
+    year: 2021,
+    mood: "dockside",
+    coverHue: 205,
+    suggested: false,
+    rails: ["deep", "sotto-2"],
+    offers: [
+      offer("juno", 0.99, "MP3", "harbour-bell"),
+      offer("bandcamp", 1.0, "MP3", "harbour-bell"),
+      offer("beatport", 1.49, "WAV", "harbour-bell"),
+    ],
+  },
+  {
+    id: "red-room-loop",
+    title: "Red Room Loop",
+    artist: "Ansel Drift",
+    label: "Private Floor",
+    genre: "House",
+    bpm: 125,
+    year: 2025,
+    mood: "intimate",
+    coverHue: 5,
+    suggested: true,
+    rails: ["house", "novita", "esclusive"],
+    offers: [offer("whatpeopleplay", 2.19, "WAV", "red-room-loop")],
+  },
+];
+
+export const RAILS: { id: string; title: string; subtitle: string }[] = [
+  {
+    id: "per-te",
+    title: "Suggerite per te",
+    subtitle: "Un mix di generi dai portali digitali",
+  },
+  {
+    id: "novita",
+    title: "In arrivo",
+    subtitle: "Uscite recenti su più store",
+  },
+  {
+    id: "sotto-2",
+    title: "Sotto i 2 €",
+    subtitle: "Il prezzo migliore è già basso",
+  },
+  {
+    id: "esclusive",
+    title: "Solo su un portale",
+    subtitle: "Qui non c’è scelta: un solo store vende",
+  },
+  {
+    id: "house",
+    title: "House",
+    subtitle: "Floor tools e groove",
+  },
+  {
+    id: "techno",
+    title: "Techno",
+    subtitle: "Peak, hypnotic, cold rooms",
+  },
+];
+
+export function getTrack(id: string): Track | undefined {
+  return TRACKS.find((t) => t.id === id);
+}
+
+export function searchTracks(query: string, genre?: string): Track[] {
+  const q = query.trim().toLowerCase();
+  return TRACKS.filter((t) => {
+    const genreOk = !genre || genre === "Tutti" || t.genre === genre;
+    if (!genreOk) return false;
+    if (!q) return true;
+    return (
+      t.title.toLowerCase().includes(q) ||
+      t.artist.toLowerCase().includes(q) ||
+      t.label.toLowerCase().includes(q) ||
+      t.genre.toLowerCase().includes(q)
+    );
+  });
+}
+
+export function tracksForRail(railId: string): Track[] {
+  return TRACKS.filter((t) => t.rails.includes(railId));
+}
+
+export function cheapestOffer(track: Track): Offer {
+  return [...track.offers].sort((a, b) => a.priceEur - b.priceEur)[0];
+}
+
+export function sortedOffers(track: Track): Offer[] {
+  return [...track.offers].sort((a, b) => a.priceEur - b.priceEur);
+}
+
+export function formatPrice(eur: number): string {
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+  }).format(eur);
+}
+
+export function allGenres(): string[] {
+  return ["Tutti", ...Array.from(new Set(TRACKS.map((t) => t.genre))).sort()];
+}
