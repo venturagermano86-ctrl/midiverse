@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
 import { ScanPanel } from "@/components/ScanPanel";
+import { SimilarRail } from "@/components/SimilarRail";
 import { StoreOffers } from "@/components/StoreOffers";
 import {
   cheapestOffer,
@@ -11,8 +13,10 @@ import {
   sortedOffers,
   TRACKS,
 } from "@/lib/catalog";
+import { findSimilar, frequentlyTogether } from "@/lib/engines/similar";
 import { scanTrack } from "@/lib/scanners/engine";
 import { storeName } from "@/lib/stores";
+import { TrackCard } from "@/components/TrackCard";
 
 type Props = { params: { id: string } };
 
@@ -41,6 +45,8 @@ export default function TrackPage({ params }: Props) {
   const isFree = best.kind === "free" || best.priceEur === 0;
   const report = scanTrack(track);
   const paidCount = offers.filter((o) => o.kind === "paid" && o.priceEur > 0).length;
+  const similar = findSimilar(track.id, 8);
+  const together = frequentlyTogether(track.id, 4);
 
   return (
     <main className="px-5 py-8 md:px-10 md:py-12">
@@ -113,20 +119,47 @@ export default function TrackPage({ params }: Props) {
                   </p>
                 </>
               )}
-              <a
-                href={best.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex rounded-sm bg-signal px-5 py-3 text-sm font-bold text-ink transition hover:brightness-110"
-              >
-                {ctaLabel(best, exclusive)}
-              </a>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <a
+                  href={best.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex rounded-sm bg-signal px-5 py-3 text-sm font-bold text-ink transition hover:brightness-110"
+                >
+                  {ctaLabel(best, exclusive)}
+                </a>
+                <AddToCollectionButton trackId={track.id} />
+              </div>
             </div>
           </div>
 
           <StoreOffers offers={offers} />
           <ScanPanel report={report} />
         </div>
+      </div>
+
+      <div className="mt-16 space-y-14">
+        <SimilarRail
+          title="Dischi simili"
+          subtitle="Come Diggleist: genere, BPM, mood, label — i più vicini a questo"
+          hits={similar}
+        />
+
+        {together.length > 0 ? (
+          <section className="space-y-4">
+            <h2 className="font-display text-xl font-bold text-mist md:text-2xl">
+              Spesso presi insieme
+            </h2>
+            <p className="text-sm text-mist/50">
+              Stile Amazon: chi guarda questa traccia guarda anche queste.
+            </p>
+            <div className="flex gap-4 overflow-x-auto pb-2 md:gap-5">
+              {together.map((t, i) => (
+                <TrackCard key={t.id} track={t} index={i} />
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );

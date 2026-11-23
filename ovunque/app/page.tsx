@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { HomeCollectionRecs } from "@/components/HomeCollectionRecs";
 import { PortalStrip } from "@/components/PortalStrip";
 import { TrackRail } from "@/components/TrackRail";
 import { RAILS, tracksForRail } from "@/lib/catalog";
@@ -19,9 +20,9 @@ export default function HomePage() {
             className="mt-6 max-w-lg animate-rise text-base text-mist/70 md:text-lg"
             style={{ animationDelay: "120ms" }}
           >
-            Controlliamo {STORE_ORDER.length} portali — Beatport, Bandcamp, SoundCloud e gli altri.
-            Se la traccia è gratis su SoundCloud, ti diciamo Scarica gratis. Se è a pagamento, vince
-            chi costa meno.
+            Controlliamo {STORE_ORDER.length} portali. Free su SoundCloud batte i pagati. Fai una
+            collezione come su Diggleist: scegli i dischi e ti troviamo i simili — piattaforma stile
+            Amazon della musica.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 animate-rise" style={{ animationDelay: "220ms" }}>
             <a
@@ -43,6 +44,7 @@ export default function HomePage() {
       <PortalStrip />
 
       <div id="suggerite" className="space-y-14 py-14">
+        <HomeCollectionRecs />
         {RAILS.map((rail) => (
           <TrackRail
             key={rail.id}

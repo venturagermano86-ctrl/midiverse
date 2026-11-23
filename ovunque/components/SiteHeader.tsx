@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FormEvent, useState } from "react";
+import { CollectionBadge } from "@/components/CollectionBadge";
 
 export function SiteHeader() {
   const router = useRouter();
@@ -15,13 +16,21 @@ export function SiteHeader() {
   }
 
   return (
-    <header className="relative z-20 flex flex-wrap items-center gap-4 px-5 py-5 md:px-10">
+    <header className="relative z-20 flex flex-wrap items-center gap-3 px-5 py-5 md:gap-4 md:px-10">
       <Link href="/" className="font-display text-xl font-bold tracking-tight text-mist md:text-2xl">
         OVUNQUE
       </Link>
+      <nav className="flex items-center gap-3 text-xs font-semibold uppercase tracking-wider text-mist/50">
+        <Link href="/cerca" className="transition hover:text-signal">
+          Catalogo
+        </Link>
+        <Link href="/collezione" className="transition hover:text-signal">
+          Cassa
+        </Link>
+      </nav>
       <form
         onSubmit={onSubmit}
-        className="ml-auto flex min-w-[min(100%,18rem)] flex-1 max-w-md items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 backdrop-blur-md"
+        className="order-last flex w-full min-w-[min(100%,18rem)] flex-1 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-4 py-2 backdrop-blur-md md:order-none md:ml-auto md:max-w-md"
       >
         <label htmlFor="search" className="sr-only">
           Cerca traccia o artista
@@ -40,6 +49,7 @@ export function SiteHeader() {
           Cerca
         </button>
       </form>
+      <CollectionBadge />
     </header>
   );
 }
