@@ -83,3 +83,4 @@ Esempi pronti Midivrs / Germano Ventura: `missioni-gv.md`.
 | `prompts.md` | Prompt pronti (EN per i modelli, linee IT ok) |
 | `missioni-gv.md` | 3 missioni già scritte per Midivrs / Germano Ventura |
 | `midivrs-promo-reel.mp4` | Draft reel Midivrs (reference → MIDI project) |
+| `ig-settimana-1.md` | Strategia Instagram @midivrs · primi 7 giorni + Higgsfield |
