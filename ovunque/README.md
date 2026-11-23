@@ -1,12 +1,13 @@
 # OVUNQUE
 
-Piattaforma per scoprire musica acquistabile e confrontare i prezzi su Beatport, Bandcamp, Traxsource, Juno Download e altri portali.
+Piattaforma che scansiona i portali digitali (Beatport, Bandcamp, Traxsource, Juno, SoundCloud, Clone, Hardwax, …) e confronta **free vs a pagamento** sulla stessa traccia.
 
-- Home con tracce suggerite
-- Scheda traccia: un solo store oppure più portali con prezzi
-- CTA “compra al prezzo migliore”
+- Home con suggerimenti + rail **Scarica gratis**
+- Se è gratis su SoundCloud → CTA **Scarica gratis** (meglio di Bandcamp)
+- Se è solo a pagamento → prezzo migliore tra i negozi
+- Motore `lib/scanners` + `GET /api/scan/:id`
 
-Catalogo attuale: dati di esempio (sample data) per dimostrare il flusso. I link aprono gli store esterni.
+Catalogo attuale: sample data. Adapter pronti per API reali.
 
 ```bash
 cd ovunque
@@ -14,4 +15,4 @@ npm install
 npm run dev
 ```
 
-Apri http://127.0.0.1:3456
+http://127.0.0.1:3456

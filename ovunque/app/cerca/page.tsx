@@ -8,6 +8,7 @@ import {
   allGenres,
   cheapestOffer,
   formatPrice,
+  hasFreeOffer,
   searchTracks,
 } from "@/lib/catalog";
 import { storeName } from "@/lib/stores";
@@ -25,7 +26,8 @@ export default function SearchPage() {
     <main className="px-5 py-8 md:px-10 md:py-12">
       <h1 className="font-display text-3xl font-extrabold text-mist md:text-4xl">Catalogo</h1>
       <p className="mt-2 max-w-xl text-sm text-mist/50">
-        Tutti i generi insieme. Apri una traccia per vedere su quali portali si compra e quanto costa.
+        Tutti i generi insieme. Free su SoundCloud batte i pagati; altrimenti vince il portale più
+        economico.
       </p>
 
       <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -60,7 +62,9 @@ export default function SearchPage() {
       <ul className="mt-4 divide-y divide-white/10 border-y border-white/10">
         {results.map((track, i) => {
           const best = cheapestOffer(track);
+          if (!best) return null;
           const multi = track.offers.length > 1;
+          const free = hasFreeOffer(track);
           return (
             <li key={track.id} className="animate-rise" style={{ animationDelay: `${i * 40}ms` }}>
               <Link
@@ -73,17 +77,28 @@ export default function SearchPage() {
                   className="h-14 w-14 shrink-0 rounded-sm"
                 />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-display font-semibold text-mist">{track.title}</p>
+                  <p className="truncate font-display font-semibold text-mist">
+                    {track.title}
+                    {free ? (
+                      <span className="ml-2 align-middle text-[0.65rem] font-bold uppercase tracking-wider text-signal">
+                        Free
+                      </span>
+                    ) : null}
+                  </p>
                   <p className="truncate text-sm text-mist/50">
                     {track.artist} · {track.genre}
                   </p>
                 </div>
                 <div className="hidden text-right sm:block">
-                  <p className="font-semibold text-signal">{formatPrice(best.priceEur)}</p>
+                  <p className="font-semibold text-signal">
+                    {formatPrice(best.priceEur, best.kind)}
+                  </p>
                   <p className="text-xs text-mist/40">
-                    {multi
-                      ? `${track.offers.length} portali · da ${storeName(best.storeId)}`
-                      : `solo ${storeName(best.storeId)}`}
+                    {free
+                      ? `Scarica gratis · ${storeName(best.storeId)}`
+                      : multi
+                        ? `${track.offers.length} portali · da ${storeName(best.storeId)}`
+                        : `solo ${storeName(best.storeId)}`}
                   </p>
                 </div>
               </Link>

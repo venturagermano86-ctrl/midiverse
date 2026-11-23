@@ -1,14 +1,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CoverArt } from "@/components/CoverArt";
+import { ScanPanel } from "@/components/ScanPanel";
 import { StoreOffers } from "@/components/StoreOffers";
 import {
   cheapestOffer,
+  ctaLabel,
   formatPrice,
   getTrack,
   sortedOffers,
   TRACKS,
 } from "@/lib/catalog";
+import { scanTrack } from "@/lib/scanners/engine";
 import { storeName } from "@/lib/stores";
 
 type Props = { params: { id: string } };
@@ -22,7 +25,7 @@ export function generateMetadata({ params }: Props) {
   if (!track) return { title: "Traccia — OVUNQUE" };
   return {
     title: `${track.title} — ${track.artist} | OVUNQUE`,
-    description: `Confronta i prezzi di ${track.title} su ${track.offers.length} portali.`,
+    description: `Confronta free e prezzi di ${track.title} su ${track.offers.length} portali.`,
   };
 }
 
@@ -32,7 +35,12 @@ export default function TrackPage({ params }: Props) {
 
   const offers = sortedOffers(track);
   const best = cheapestOffer(track);
+  if (!best) notFound();
+
   const exclusive = offers.length === 1;
+  const isFree = best.kind === "free" || best.priceEur === 0;
+  const report = scanTrack(track);
+  const paidCount = offers.filter((o) => o.kind === "paid" && o.priceEur > 0).length;
 
   return (
     <main className="px-5 py-8 md:px-10 md:py-12">
@@ -60,10 +68,31 @@ export default function TrackPage({ params }: Props) {
             <p className="mt-2 text-lg text-mist/70">{track.artist}</p>
             <p className="mt-1 text-sm text-mist/40">
               {track.label} · {track.year}
+              {track.isrc ? ` · ${track.isrc}` : ""}
             </p>
 
-            <div className="mt-6 rounded-sm border border-white/10 bg-white/[0.03] p-5">
-              {exclusive ? (
+            <div
+              className={`mt-6 rounded-sm border p-5 ${
+                isFree
+                  ? "border-signal/40 bg-signal/10"
+                  : "border-white/10 bg-white/[0.03]"
+              }`}
+            >
+              {isFree ? (
+                <>
+                  <p className="text-sm font-semibold text-signal">
+                    Scarica gratis — meglio di Bandcamp
+                  </p>
+                  <p className="mt-2 font-display text-2xl font-bold text-mist">
+                    {storeName(best.storeId)} · Gratis
+                  </p>
+                  {paidCount > 0 && (
+                    <p className="mt-1 text-sm text-mist/55">
+                      Stessa traccia anche a pagamento su {paidCount} portali — free vince.
+                    </p>
+                  )}
+                </>
+              ) : exclusive ? (
                 <>
                   <p className="text-sm text-ember">Disponibile solo su un portale</p>
                   <p className="mt-2 font-display text-2xl font-bold text-mist">
@@ -74,6 +103,7 @@ export default function TrackPage({ params }: Props) {
                 <>
                   <p className="text-sm text-mist/55">
                     In vendita su <strong className="text-mist">{offers.length} portali</strong>
+                    {" · "}nessun free trovato
                   </p>
                   <p className="mt-2 font-display text-2xl font-bold text-mist">
                     Da {formatPrice(best.priceEur)}{" "}
@@ -89,14 +119,13 @@ export default function TrackPage({ params }: Props) {
                 rel="noopener noreferrer"
                 className="mt-4 inline-flex rounded-sm bg-signal px-5 py-3 text-sm font-bold text-ink transition hover:brightness-110"
               >
-                {exclusive
-                  ? `Compra su ${storeName(best.storeId)}`
-                  : `Compra al prezzo migliore · ${formatPrice(best.priceEur)}`}
+                {ctaLabel(best, exclusive)}
               </a>
             </div>
           </div>
 
           <StoreOffers offers={offers} />
+          <ScanPanel report={report} />
         </div>
       </div>
     </main>

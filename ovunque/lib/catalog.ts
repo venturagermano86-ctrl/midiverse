@@ -1,31 +1,70 @@
-import type { Offer, Track } from "./types";
+import type { Offer, StoreId, Track } from "./types";
+import { cheapestOffer as pickCheapest, rankOffers } from "./engines/price";
 
-function offer(
-  storeId: Offer["storeId"],
-  priceEur: number,
-  format: string,
-  slug: string,
-): Offer {
-  const paths: Record<Offer["storeId"], string> = {
+export {
+  cheapestOffer,
+  formatPrice,
+  hasFreeOffer,
+  freeOffers,
+  paidOffers,
+  rankOffers,
+  ctaLabel,
+  offerButtonLabel,
+} from "./engines/price";
+
+function urlFor(storeId: StoreId, slug: string): string {
+  const paths: Record<StoreId, string> = {
     beatport: `https://www.beatport.com/track/${slug}`,
     bandcamp: `https://bandcamp.com/track/${slug}`,
     traxsource: `https://www.traxsource.com/track/${slug}`,
     juno: `https://www.junodownload.com/${slug}`,
     whatpeopleplay: `https://www.whatpeopleplay.com/track/${slug}`,
     boomkat: `https://boomkat.com/products/${slug}`,
+    bleep: `https://bleep.com/track/${slug}`,
+    clone: `https://clone.nl/item/${slug}`,
+    hardwax: `https://hardwax.com/${slug}`,
     apple: `https://music.apple.com/track/${slug}`,
     amazon: `https://www.amazon.com/dp/${slug}`,
+    soundcloud: `https://soundcloud.com/${slug}/download`,
+    youtube: `https://music.youtube.com/watch?v=${slug}`,
+    freesound: `https://example.com/free/${slug}`,
   };
+  return paths[storeId];
+}
+
+function paid(
+  storeId: StoreId,
+  priceEur: number,
+  format: string,
+  slug: string,
+): Offer {
   return {
     storeId,
+    kind: "paid",
     priceEur,
     currency: "EUR",
     format,
-    url: paths[storeId],
+    url: urlFor(storeId, slug),
+    access: "download",
   };
 }
 
-/** Catalogo demo — prezzi e disponibilità di esempio per confrontare i portali. */
+function freeDl(storeId: StoreId, format: string, slug: string): Offer {
+  return {
+    storeId,
+    kind: "free",
+    priceEur: 0,
+    currency: "EUR",
+    format,
+    url: urlFor(storeId, slug),
+    access: "download",
+  };
+}
+
+/**
+ * Catalogo demo — stessi brani su più portali.
+ * Dove c’è SoundCloud free, batte Bandcamp e tutti i pagati.
+ */
 export const TRACKS: Track[] = [
   {
     id: "hold-the-mark",
@@ -39,12 +78,15 @@ export const TRACKS: Track[] = [
     mood: "club warm",
     coverHue: 28,
     suggested: true,
-    rails: ["per-te", "house", "sotto-2"],
+    rails: ["per-te", "house", "sotto-2", "gratis"],
+    isrc: "IT-GV0-25-00001",
     offers: [
-      offer("beatport", 1.79, "WAV", "hold-the-mark"),
-      offer("traxsource", 1.59, "WAV", "hold-the-mark"),
-      offer("juno", 1.49, "MP3 / WAV", "hold-the-mark"),
-      offer("bandcamp", 1.29, "FLAC / MP3", "hold-the-mark"),
+      freeDl("soundcloud", "MP3 320 · free DL", "germanoventura/hold-the-mark"),
+      paid("beatport", 1.79, "WAV", "hold-the-mark"),
+      paid("traxsource", 1.59, "WAV", "hold-the-mark"),
+      paid("juno", 1.49, "MP3 / WAV", "hold-the-mark"),
+      paid("bandcamp", 1.29, "FLAC / MP3", "hold-the-mark"),
+      paid("clone", 1.69, "WAV", "hold-the-mark"),
     ],
   },
   {
@@ -59,12 +101,15 @@ export const TRACKS: Track[] = [
     mood: "rolling",
     coverHue: 195,
     suggested: true,
-    rails: ["per-te", "house"],
+    rails: ["per-te", "house", "gratis"],
+    isrc: "IT-GV0-25-00002",
     offers: [
-      offer("beatport", 1.99, "WAV", "spin-the-gate"),
-      offer("traxsource", 1.79, "WAV", "spin-the-gate"),
-      offer("whatpeopleplay", 1.69, "WAV", "spin-the-gate"),
-      offer("bandcamp", 2.0, "FLAC", "spin-the-gate"),
+      freeDl("soundcloud", "MP3 · free DL", "germanoventura/spin-the-gate"),
+      paid("beatport", 1.99, "WAV", "spin-the-gate"),
+      paid("traxsource", 1.79, "WAV", "spin-the-gate"),
+      paid("whatpeopleplay", 1.69, "WAV", "spin-the-gate"),
+      paid("bandcamp", 2.0, "FLAC", "spin-the-gate"),
+      paid("juno", 1.89, "WAV", "spin-the-gate"),
     ],
   },
   {
@@ -79,11 +124,14 @@ export const TRACKS: Track[] = [
     mood: "late night",
     coverHue: 210,
     suggested: true,
-    rails: ["per-te", "deep", "novita"],
+    rails: ["per-te", "deep", "novita", "gratis"],
     offers: [
-      offer("beatport", 2.29, "WAV", "midnight-relay"),
-      offer("bandcamp", 1.5, "FLAC / MP3", "midnight-relay"),
-      offer("boomkat", 1.8, "MP3 / WAV", "midnight-relay"),
+      freeDl("soundcloud", "WAV · free DL", "lumenquay/midnight-relay"),
+      freeDl("freesound", "FLAC · label freebie", "midnight-relay"),
+      paid("beatport", 2.29, "WAV", "midnight-relay"),
+      paid("bandcamp", 1.5, "FLAC / MP3", "midnight-relay"),
+      paid("boomkat", 1.8, "MP3 / WAV", "midnight-relay"),
+      paid("bleep", 1.99, "FLAC", "midnight-relay"),
     ],
   },
   {
@@ -100,11 +148,13 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["per-te", "techno", "novita"],
     offers: [
-      offer("beatport", 2.49, "WAV", "glass-corridor"),
-      offer("juno", 2.19, "WAV", "glass-corridor"),
-      offer("traxsource", 2.29, "WAV", "glass-corridor"),
-      offer("whatpeopleplay", 2.09, "WAV", "glass-corridor"),
-      offer("amazon", 1.99, "MP3", "glass-corridor"),
+      paid("beatport", 2.49, "WAV", "glass-corridor"),
+      paid("juno", 2.19, "WAV", "glass-corridor"),
+      paid("traxsource", 2.29, "WAV", "glass-corridor"),
+      paid("whatpeopleplay", 2.09, "WAV", "glass-corridor"),
+      paid("amazon", 1.99, "MP3", "glass-corridor"),
+      paid("hardwax", 2.39, "WAV", "glass-corridor"),
+      paid("bandcamp", 2.5, "FLAC", "glass-corridor"),
     ],
   },
   {
@@ -119,7 +169,7 @@ export const TRACKS: Track[] = [
     coverHue: 160,
     suggested: true,
     rails: ["per-te", "ambient", "esclusive"],
-    offers: [offer("bandcamp", 3.0, "FLAC / ALAC", "tape-warmth-03")],
+    offers: [paid("bandcamp", 3.0, "FLAC / ALAC", "tape-warmth-03")],
   },
   {
     id: "beatport-exclusive",
@@ -134,7 +184,7 @@ export const TRACKS: Track[] = [
     coverHue: 350,
     suggested: true,
     rails: ["techno", "novita", "esclusive"],
-    offers: [offer("beatport", 2.49, "WAV", "peak-hour-knife")],
+    offers: [paid("beatport", 2.49, "WAV", "peak-hour-knife")],
   },
   {
     id: "salt-line",
@@ -148,13 +198,15 @@ export const TRACKS: Track[] = [
     mood: "sunlit",
     coverHue: 40,
     suggested: true,
-    rails: ["per-te", "disco", "sotto-2"],
+    rails: ["per-te", "disco", "sotto-2", "gratis"],
     offers: [
-      offer("bandcamp", 1.0, "MP3 / FLAC", "salt-line"),
-      offer("juno", 1.29, "MP3", "salt-line"),
-      offer("apple", 1.29, "AAC", "salt-line"),
-      offer("amazon", 1.19, "MP3", "salt-line"),
-      offer("beatport", 1.79, "WAV", "salt-line"),
+      freeDl("soundcloud", "MP3 · free DL", "miracoast/salt-line"),
+      paid("bandcamp", 1.0, "MP3 / FLAC", "salt-line"),
+      paid("juno", 1.29, "MP3", "salt-line"),
+      paid("apple", 1.29, "AAC", "salt-line"),
+      paid("amazon", 1.19, "MP3", "salt-line"),
+      paid("beatport", 1.79, "WAV", "salt-line"),
+      paid("traxsource", 1.49, "WAV", "salt-line"),
     ],
   },
   {
@@ -168,11 +220,14 @@ export const TRACKS: Track[] = [
     mood: "voltage",
     coverHue: 185,
     suggested: false,
-    rails: ["electro", "novita"],
+    rails: ["electro", "novita", "gratis"],
     offers: [
-      offer("beatport", 1.89, "WAV", "low-voltage"),
-      offer("traxsource", 1.69, "WAV", "low-voltage"),
-      offer("juno", 1.59, "WAV", "low-voltage"),
+      freeDl("youtube", "Promo free (audio)", "low-voltage-grid"),
+      paid("beatport", 1.89, "WAV", "low-voltage"),
+      paid("traxsource", 1.69, "WAV", "low-voltage"),
+      paid("juno", 1.59, "WAV", "low-voltage"),
+      paid("clone", 1.55, "WAV", "low-voltage"),
+      paid("bandcamp", 2.0, "FLAC", "low-voltage"),
     ],
   },
   {
@@ -189,10 +244,11 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["house", "per-te"],
     offers: [
-      offer("traxsource", 1.49, "WAV", "river-cut"),
-      offer("beatport", 1.79, "WAV", "river-cut"),
-      offer("bandcamp", 1.5, "FLAC", "river-cut"),
-      offer("whatpeopleplay", 1.39, "WAV", "river-cut"),
+      paid("traxsource", 1.49, "WAV", "river-cut"),
+      paid("beatport", 1.79, "WAV", "river-cut"),
+      paid("bandcamp", 1.5, "FLAC", "river-cut"),
+      paid("whatpeopleplay", 1.39, "WAV", "river-cut"),
+      paid("bleep", 1.69, "FLAC", "river-cut"),
     ],
   },
   {
@@ -207,8 +263,9 @@ export const TRACKS: Track[] = [
     suggested: false,
     rails: ["ambient", "esclusive"],
     offers: [
-      offer("boomkat", 2.5, "WAV / MP3", "chrome-prayer"),
-      offer("bandcamp", 2.0, "FLAC", "chrome-prayer"),
+      paid("boomkat", 2.5, "WAV / MP3", "chrome-prayer"),
+      paid("bandcamp", 2.0, "FLAC", "chrome-prayer"),
+      paid("bleep", 2.29, "FLAC", "chrome-prayer"),
     ],
   },
   {
@@ -222,12 +279,14 @@ export const TRACKS: Track[] = [
     mood: "open air",
     coverHue: 15,
     suggested: true,
-    rails: ["per-te", "house", "novita"],
+    rails: ["per-te", "house", "novita", "gratis"],
     offers: [
-      offer("beatport", 2.29, "WAV", "open-roof"),
-      offer("traxsource", 1.99, "WAV", "open-roof"),
-      offer("juno", 1.89, "WAV", "open-roof"),
-      offer("apple", 1.29, "AAC", "open-roof"),
+      freeDl("soundcloud", "MP3 · free DL", "solaraduo/open-roof"),
+      paid("beatport", 2.29, "WAV", "open-roof"),
+      paid("traxsource", 1.99, "WAV", "open-roof"),
+      paid("juno", 1.89, "WAV", "open-roof"),
+      paid("apple", 1.29, "AAC", "open-roof"),
+      paid("bandcamp", 2.0, "FLAC", "open-roof"),
     ],
   },
   {
@@ -241,11 +300,12 @@ export const TRACKS: Track[] = [
     mood: "neon dusk",
     coverHue: 300,
     suggested: false,
-    rails: ["novita"],
+    rails: ["novita", "gratis"],
     offers: [
-      offer("bandcamp", 1.5, "FLAC / MP3", "static-kiss"),
-      offer("amazon", 1.29, "MP3", "static-kiss"),
-      offer("apple", 1.29, "AAC", "static-kiss"),
+      freeDl("soundcloud", "MP3 · free DL", "neonfold/static-kiss"),
+      paid("bandcamp", 1.5, "FLAC / MP3", "static-kiss"),
+      paid("amazon", 1.29, "MP3", "static-kiss"),
+      paid("apple", 1.29, "AAC", "static-kiss"),
     ],
   },
   {
@@ -261,9 +321,11 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["techno", "per-te", "sotto-2"],
     offers: [
-      offer("beatport", 1.49, "WAV", "dry-ice"),
-      offer("juno", 1.19, "WAV", "dry-ice"),
-      offer("whatpeopleplay", 1.29, "WAV", "dry-ice"),
+      paid("beatport", 1.49, "WAV", "dry-ice"),
+      paid("juno", 1.19, "WAV", "dry-ice"),
+      paid("whatpeopleplay", 1.29, "WAV", "dry-ice"),
+      paid("hardwax", 1.39, "WAV", "dry-ice"),
+      paid("bandcamp", 1.5, "FLAC", "dry-ice"),
     ],
   },
   {
@@ -279,11 +341,12 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["disco", "per-te"],
     offers: [
-      offer("beatport", 1.99, "WAV", "velvet-runway"),
-      offer("bandcamp", 2.5, "FLAC", "velvet-runway"),
-      offer("traxsource", 1.79, "WAV", "velvet-runway"),
-      offer("juno", 1.69, "MP3 / WAV", "velvet-runway"),
-      offer("amazon", 1.49, "MP3", "velvet-runway"),
+      paid("beatport", 1.99, "WAV", "velvet-runway"),
+      paid("bandcamp", 2.5, "FLAC", "velvet-runway"),
+      paid("traxsource", 1.79, "WAV", "velvet-runway"),
+      paid("juno", 1.69, "MP3 / WAV", "velvet-runway"),
+      paid("amazon", 1.49, "MP3", "velvet-runway"),
+      paid("clone", 1.85, "WAV", "velvet-runway"),
     ],
   },
   {
@@ -297,11 +360,12 @@ export const TRACKS: Track[] = [
     mood: "dockside",
     coverHue: 205,
     suggested: false,
-    rails: ["deep", "sotto-2"],
+    rails: ["deep", "sotto-2", "gratis"],
     offers: [
-      offer("juno", 0.99, "MP3", "harbour-bell"),
-      offer("bandcamp", 1.0, "MP3", "harbour-bell"),
-      offer("beatport", 1.49, "WAV", "harbour-bell"),
+      freeDl("soundcloud", "MP3 · free DL", "eastpier/harbour-bell"),
+      paid("juno", 0.99, "MP3", "harbour-bell"),
+      paid("bandcamp", 1.0, "MP3", "harbour-bell"),
+      paid("beatport", 1.49, "WAV", "harbour-bell"),
     ],
   },
   {
@@ -316,11 +380,37 @@ export const TRACKS: Track[] = [
     coverHue: 5,
     suggested: true,
     rails: ["house", "novita", "esclusive"],
-    offers: [offer("whatpeopleplay", 2.19, "WAV", "red-room-loop")],
+    offers: [paid("whatpeopleplay", 2.19, "WAV", "red-room-loop")],
+  },
+  {
+    id: "acid-dock",
+    title: "Acid Dock",
+    artist: "Pier Circuit",
+    label: "303 Bay",
+    genre: "Acid",
+    bpm: 130,
+    year: 2025,
+    mood: "wet acid",
+    coverHue: 95,
+    suggested: true,
+    rails: ["per-te", "techno", "novita", "gratis"],
+    offers: [
+      freeDl("soundcloud", "WAV · free DL", "piercircuit/acid-dock"),
+      paid("beatport", 2.19, "WAV", "acid-dock"),
+      paid("clone", 1.99, "WAV", "acid-dock"),
+      paid("hardwax", 2.09, "WAV", "acid-dock"),
+      paid("bandcamp", 2.5, "FLAC", "acid-dock"),
+      paid("juno", 1.89, "WAV", "acid-dock"),
+    ],
   },
 ];
 
 export const RAILS: { id: string; title: string; subtitle: string }[] = [
+  {
+    id: "gratis",
+    title: "Scarica gratis",
+    subtitle: "Su SoundCloud (o free drop) — batte Bandcamp e tutti i pagati",
+  },
   {
     id: "per-te",
     title: "Suggerite per te",
@@ -333,8 +423,8 @@ export const RAILS: { id: string; title: string; subtitle: string }[] = [
   },
   {
     id: "sotto-2",
-    title: "Sotto i 2 €",
-    subtitle: "Il prezzo migliore è già basso",
+    title: "Sotto i 2 € (se non è gratis)",
+    subtitle: "Il prezzo migliore a pagamento è già basso",
   },
   {
     id: "esclusive",
@@ -376,21 +466,15 @@ export function tracksForRail(railId: string): Track[] {
   return TRACKS.filter((t) => t.rails.includes(railId));
 }
 
-export function cheapestOffer(track: Track): Offer {
-  return [...track.offers].sort((a, b) => a.priceEur - b.priceEur)[0];
-}
-
 export function sortedOffers(track: Track): Offer[] {
-  return [...track.offers].sort((a, b) => a.priceEur - b.priceEur);
-}
-
-export function formatPrice(eur: number): string {
-  return new Intl.NumberFormat("it-IT", {
-    style: "currency",
-    currency: "EUR",
-  }).format(eur);
+  return rankOffers(track.offers);
 }
 
 export function allGenres(): string[] {
   return ["Tutti", ...Array.from(new Set(TRACKS.map((t) => t.genre))).sort()];
+}
+
+/** Alias usato dai componenti legacy */
+export function cheapest(track: Track) {
+  return pickCheapest(track);
 }

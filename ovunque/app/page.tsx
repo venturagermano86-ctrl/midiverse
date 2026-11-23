@@ -1,6 +1,8 @@
 import Link from "next/link";
+import { PortalStrip } from "@/components/PortalStrip";
 import { TrackRail } from "@/components/TrackRail";
 import { RAILS, tracksForRail } from "@/lib/catalog";
+import { STORE_ORDER } from "@/lib/stores";
 
 export default function HomePage() {
   return (
@@ -14,18 +16,19 @@ export default function HomePage() {
             OVUNQUE
           </p>
           <p
-            className="mt-6 max-w-md animate-rise text-base text-mist/70 md:text-lg"
+            className="mt-6 max-w-lg animate-rise text-base text-mist/70 md:text-lg"
             style={{ animationDelay: "120ms" }}
           >
-            Musica acquistabile da Beatport, Bandcamp e tutti i portali — un posto solo. Vedi dove si
-            vende e paga il meno possibile.
+            Controlliamo {STORE_ORDER.length} portali — Beatport, Bandcamp, SoundCloud e gli altri.
+            Se la traccia è gratis su SoundCloud, ti diciamo Scarica gratis. Se è a pagamento, vince
+            chi costa meno.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 animate-rise" style={{ animationDelay: "220ms" }}>
             <a
               href="#suggerite"
               className="rounded-sm bg-signal px-5 py-3 text-sm font-bold text-ink transition hover:brightness-110"
             >
-              Ascolta i suggerimenti
+              Vedi i suggerimenti
             </a>
             <Link
               href="/cerca"
@@ -36,6 +39,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <PortalStrip />
 
       <div id="suggerite" className="space-y-14 py-14">
         {RAILS.map((rail) => (
