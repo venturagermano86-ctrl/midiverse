@@ -52,3 +52,8 @@ fi
 
 echo "Done. For Cloud Agents: enable Sync Skills, and add Context7/21st MCP at cursor.com/agents."
 echo "Get 21st key: https://21st.dev/mcp"
+
+echo "==> House vocals skills (Vocaler + ElevenLabs music + sync)"
+npx --yes skills add Vocaler-AI/music-skills -g -a cursor -y --copy
+npx --yes skills add elevenlabs/skills -g -a cursor -y --copy -s music
+echo "Set ELEVENLABS_API_KEY for audio generation. Text hooks work without it via gv-house-vocals."
