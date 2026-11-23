@@ -169,5 +169,7 @@ Work in phases and STOP at the end of each one until I approve:
    Before each launch, say credit cost and running total. If over budget, stop and ask.
 6. Editing plan (prompt 6) with HUD in post only.
 Never invent product claims; only what the real recording shows.
-Brand: Germano Ventura / Midiverse. No Rockstar / GTA logos on screen.
+Brand: Midivrs (midivrs.com) — Upload a track. Get your project.
+Product truth only: one reference → four MIDI stems (Drums, Bass, Synth, Melody) → open in any DAW.
+No Rockstar / GTA logos on screen.
 ```

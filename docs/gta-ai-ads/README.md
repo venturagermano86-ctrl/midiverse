@@ -1,8 +1,16 @@
 # Kit: spot stile GTA con Claude + Higgsfield
 
-Guida operativa estratta dal reel di [@mikcosentino](https://www.instagram.com/reel/DgFzhaPIuqM/) (Claude × Higgsfield, CTA “BLACK”) e adattata al brand **Germano Ventura** / Midiverse.
+Guida operativa estratta dal reel di [@mikcosentino](https://www.instagram.com/reel/DgFzhaPIuqM/) (Claude × Higgsfield, CTA “BLACK”) e adattata al brand **[Midivrs](https://midivrs.com)** — *Upload a track. Get your project.*
 
-> Il reel chiede di scrivere “BLACK” in DM per la guida privata. Qui hai il metodo pubblico equivalente (pipeline Claude + Higgsfield Seedance, stile open-world), già pronto da usare per promo DJ, Midiverse e pack MIDI.
+> Il reel chiede di scrivere “BLACK” in DM per la guida privata. Qui hai il metodo pubblico equivalente (pipeline Claude + Higgsfield Seedance, stile open-world), già pronto per promo Midivrs (reference → 4 stem MIDI).
+
+## Reel Midivrs (draft)
+
+File: [`midivrs-promo-reel.mp4`](./midivrs-promo-reel.mp4) — verticale 1080×1920, ~22 s.
+
+Missione: blank DAW → drop reference → read track → unlock Drums/Bass/Synth/Melody → open in DAW → end card `midivrs.com`.
+
+HUD in post (layer edit del kit). Frame cinematici generati in cloud; audio bed da excerpt della reference in repo. Prossimo step Higgsfield Seedance: animare i frame come `start_image` (prompt §5).
 
 ## Cosa fa il reel (in breve)
 
@@ -49,7 +57,7 @@ Scrivere “GTA style” a parole → spesso foto reale o cartone.
 6. Montaggio + HUD → §6  
 
 Prompt master copy-paste: §7.  
-Esempi pronti Germano Ventura / Midiverse: `missioni-gv.md`.
+Esempi pronti Midivrs / Germano Ventura: `missioni-gv.md`.
 
 ## Budget tipico (ordine di grandezza)
 
@@ -73,4 +81,5 @@ Esempi pronti Germano Ventura / Midiverse: `missioni-gv.md`.
 | --- | --- |
 | `README.md` | Questa guida |
 | `prompts.md` | Prompt pronti (EN per i modelli, linee IT ok) |
-| `missioni-gv.md` | 3 missioni già scritte per Germano Ventura / Midiverse |
+| `missioni-gv.md` | 3 missioni già scritte per Midivrs / Germano Ventura |
+| `midivrs-promo-reel.mp4` | Draft reel Midivrs (reference → MIDI project) |

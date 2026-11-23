@@ -1,7 +1,25 @@
-# 3 missioni pronte · Germano Ventura / Midiverse
+# 3 missioni pronte · Midivrs / Germano Ventura
+
+Prodotto: **[midivrs.com](https://midivrs.com)** — drop a reference → four MIDI stems (Drums, Bass, Synth, Melody) → open in any DAW.
 
 Usa ognuna come `[MISSION]` nel prompt §1 di `prompts.md`.  
 Personaggio: **Germano** (DJ house) · ancore consigliate: cuffie al collo · catenina oro · wristband nero.
+
+---
+
+## Missione 0 — “GET UNSTUCK” (Midivrs product)
+
+**Una frase:** Un producer ha la DAW vuota e 48 secondi di ispirazione: deve droppare una reference su Midivrs e sbloccare i quattro stem MIDI prima che sparisca l’idea.
+
+| Elemento | Valore |
+| --- | --- |
+| Obiettivo | Session ready: Drums · Bass · Synth · Melody |
+| Countdown | 00:48 |
+| Ostacolo | Blank page / non sa da dove partire |
+| Hook | DAW vuota, cursore che lampeggia |
+| Punchline finale | «Session ready.» |
+| HUD | `MISSION: GET UNSTUCK` → `DROP REFERENCE` → `UNLOCK STEMS` |
+| Prodotto | midivrs.com — upload track → MIDI project |
 
 ---
 
@@ -17,7 +35,7 @@ Personaggio: **Germano** (DJ house) · ancore consigliate: cuffie al collo · ca
 | Hook (shot 1) | Dancefloor già in delirio, luci rosse, Germano che scatta verso l’uscita |
 | Punchline finale (secca) | «Drop. Ora.» |
 | HUD edit | `MISSION: DROP THE TRACK` · `OBJ: Reach the booth` · `+500 XP` · stelle |
-| Prodotto in frame reale (opz.) | Schermo Midiverse / player con la traccia |
+| Prodotto in frame reale (opz.) | Schermo midivrs.com / player con la traccia |
 
 **Battute sample (IT, ≤10 parole):**
 - Valletto: «Macchina in fondo, capo.»
@@ -39,7 +57,7 @@ Personaggio: **Germano** (DJ house) · ancore consigliate: cuffie al collo · ca
 | Hook | Inseguimento scooter, busta che vola, clacson |
 | Punchline finale | «Sold. Hold The Mark.» |
 | HUD | `MISSION: HOLD THE MARK` · `OBJ: Recover the pack` · `+$` · stelle |
-| Prodotto | Cover pack / cartella Midiverse sullo schermo telefono |
+| Prodotto | Cover pack / cartella Midivrs sullo schermo telefono |
 
 **Battute sample:**
 - Rider: «Consegna per… chi?»
@@ -76,7 +94,8 @@ Personaggio: **Germano** (DJ house) · ancore consigliate: cuffie al collo · ca
 | Vuoi promuovere… | Missione |
 | --- | --- |
 | Live / club / brand DJ | **A** Drop The Track |
-| Pack MIDI / Midiverse commerce | **B** Hold The Mark |
+| Pack MIDI / Midivrs commerce | **B** Hold The Mark |
 | Singolo pezzo / reel hype | **C** Spin The Gate |
+| Midivrs product (reference → stems) | usa il draft `midivrs-promo-reel.mp4` / missione GET UNSTUCK |
 
 Durata target reel: **45–79 s** (10 shot × 4–8 s, hook + stinger “X MINUTES EARLIER”).
