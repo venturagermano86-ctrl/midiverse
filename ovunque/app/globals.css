@@ -3,10 +3,16 @@
 @tailwind utilities;
 
 :root {
-  --ink: #0b0f14;
-  --mist: #e8eef5;
-  --signal: #2ec4b6;
-  --ember: #ff7a45;
+  /* Beatport-ish store black + chart lime; Bandcamp cyan per artist */
+  --ink: #050505;
+  --panel: #0e0e0e;
+  --row: #121212;
+  --mist: #f2f2f2;
+  --muted: #8a8a8a;
+  --signal: #a8ff3e;
+  --bandcamp: #1da0c3;
+  --ember: #ff5a36;
+  --line: #222;
   --font-display: "Syne", system-ui, sans-serif;
   --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
 }
@@ -23,27 +29,42 @@ body {
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--signal) 45%, transparent);
-  color: #fff;
+  background: color-mix(in srgb, var(--signal) 50%, transparent);
+  color: #000;
 }
 
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(232, 238, 245, 0.2) transparent;
+  scrollbar-color: rgba(168, 255, 62, 0.25) transparent;
 }
 
 .atmosphere {
   background:
-    radial-gradient(ellipse 90% 60% at 10% -10%, rgba(46, 196, 182, 0.22), transparent 50%),
-    radial-gradient(ellipse 70% 50% at 95% 15%, rgba(255, 122, 69, 0.14), transparent 45%),
-    radial-gradient(ellipse 60% 40% at 50% 100%, rgba(40, 80, 120, 0.25), transparent 55%),
-    linear-gradient(180deg, #0b0f14 0%, #101820 45%, #0b0f14 100%);
+    radial-gradient(ellipse 70% 40% at 80% -5%, rgba(168, 255, 62, 0.12), transparent 50%),
+    radial-gradient(ellipse 50% 35% at 0% 30%, rgba(29, 160, 195, 0.1), transparent 45%),
+    linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%);
 }
 
 .hero-plane {
   background:
-    linear-gradient(105deg, rgba(11, 15, 20, 0.2) 0%, rgba(11, 15, 20, 0.75) 55%, rgba(11, 15, 20, 0.92) 100%),
-    radial-gradient(ellipse 80% 70% at 70% 40%, rgba(46, 196, 182, 0.35), transparent 60%),
-    radial-gradient(ellipse 50% 60% at 40% 70%, rgba(255, 122, 69, 0.2), transparent 55%),
-    linear-gradient(160deg, #15202b, #0d141c);
+    linear-gradient(100deg, rgba(5, 5, 5, 0.15) 0%, rgba(5, 5, 5, 0.85) 58%, #050505 100%),
+    radial-gradient(ellipse 70% 80% at 75% 45%, rgba(168, 255, 62, 0.18), transparent 55%),
+    radial-gradient(ellipse 40% 50% at 30% 80%, rgba(29, 160, 195, 0.15), transparent 50%),
+    #0a0a0a;
+}
+
+.waveform {
+  background-image: repeating-linear-gradient(
+    90deg,
+    transparent 0,
+    transparent 2px,
+    rgba(168, 255, 62, 0.15) 2px,
+    rgba(168, 255, 62, 0.15) 3px
+  );
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cpath fill='white' d='M0 20 Q10 4 20 20 T40 20 T60 20 T80 20 T100 20 T120 20 T140 20 T160 20 T180 20 T200 20 T220 20 T240 20 T260 20 T280 20 T300 20 T320 20 T340 20 T360 20 T380 20 T400 20 V40 H0Z'/%3E%3C/svg%3E");
+  mask-size: 100% 100%;
+}
+
+.chart-row:hover {
+  background: #161616;
 }

@@ -1,52 +1,47 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { CoverArt } from "@/components/CoverArt";
-import {
-  allGenres,
-  cheapestOffer,
-  formatPrice,
-  hasFreeOffer,
-  searchTracks,
-} from "@/lib/catalog";
-import { storeName } from "@/lib/stores";
+import { ChartTable } from "@/components/ChartTable";
+import { allGenres, searchTracks } from "@/lib/catalog";
 
 export default function SearchPage() {
   const params = useSearchParams();
-  const initial = params.get("q") ?? "";
-  const [q, setQ] = useState(initial);
-  const [genre, setGenre] = useState("Tutti");
+  const initialQ = params.get("q") ?? "";
+  const initialGenre = params.get("genre") ?? "Tutti";
+  const [q, setQ] = useState(initialQ);
+  const [genre, setGenre] = useState(
+    allGenres().includes(initialGenre) ? initialGenre : "Tutti",
+  );
   const genres = allGenres();
-
   const results = useMemo(() => searchTracks(q, genre), [q, genre]);
 
   return (
-    <main className="px-5 py-8 md:px-10 md:py-12">
-      <h1 className="font-display text-3xl font-extrabold text-mist md:text-4xl">Catalogo</h1>
-      <p className="mt-2 max-w-xl text-sm text-mist/50">
-        Tutti i generi insieme. Free su SoundCloud batte i pagati; altrimenti vince il portale più
-        economico.
+    <main className="px-4 py-10 md:px-8 md:py-12">
+      <p className="text-[0.65rem] font-bold uppercase tracking-[0.22em] text-signal">Catalog</p>
+      <h1 className="mt-2 font-display text-3xl font-extrabold text-mist md:text-4xl">Tracks</h1>
+      <p className="mt-2 max-w-xl text-sm text-muted">
+        Lista stile Beatport: filtra per genere, apri la traccia, compra sul portale più conveniente
+        (o scarica free).
       </p>
 
-      <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center">
+      <div className="mt-8 flex flex-col gap-4">
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Filtra per titolo, artista, label…"
-          className="w-full max-w-md rounded-sm border border-white/15 bg-white/5 px-4 py-3 text-sm text-mist outline-none placeholder:text-mist/35 focus:border-signal/50"
+          placeholder="Filter title, artist, label…"
+          className="w-full max-w-md border border-line bg-panel px-4 py-3 text-sm text-mist outline-none placeholder:text-muted focus:border-signal/60"
         />
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-1.5">
           {genres.map((g) => (
             <button
               key={g}
               type="button"
               onClick={() => setGenre(g)}
-              className={`rounded-sm px-3 py-1.5 text-xs font-semibold transition ${
+              className={`px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider transition ${
                 genre === g
                   ? "bg-signal text-ink"
-                  : "border border-white/10 text-mist/60 hover:border-white/25 hover:text-mist"
+                  : "border border-line text-muted hover:border-signal/40 hover:text-mist"
               }`}
             >
               {g}
@@ -55,61 +50,12 @@ export default function SearchPage() {
         </div>
       </div>
 
-      <p className="mt-6 text-xs uppercase tracking-wider text-mist/40">
-        {results.length} tracc{results.length === 1 ? "ia" : "e"}
+      <p className="mt-6 text-[0.65rem] uppercase tracking-wider text-muted">
+        {results.length} result{results.length === 1 ? "" : "s"}
       </p>
-
-      <ul className="mt-4 divide-y divide-white/10 border-y border-white/10">
-        {results.map((track, i) => {
-          const best = cheapestOffer(track);
-          if (!best) return null;
-          const multi = track.offers.length > 1;
-          const free = hasFreeOffer(track);
-          return (
-            <li key={track.id} className="animate-rise" style={{ animationDelay: `${i * 40}ms` }}>
-              <Link
-                href={`/traccia/${track.id}`}
-                className="flex items-center gap-4 py-4 transition hover:bg-white/[0.03]"
-              >
-                <CoverArt
-                  hue={track.coverHue}
-                  title={track.title}
-                  className="h-14 w-14 shrink-0 rounded-sm"
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-display font-semibold text-mist">
-                    {track.title}
-                    {free ? (
-                      <span className="ml-2 align-middle text-[0.65rem] font-bold uppercase tracking-wider text-signal">
-                        Free
-                      </span>
-                    ) : null}
-                  </p>
-                  <p className="truncate text-sm text-mist/50">
-                    {track.artist} · {track.genre}
-                  </p>
-                </div>
-                <div className="hidden text-right sm:block">
-                  <p className="font-semibold text-signal">
-                    {formatPrice(best.priceEur, best.kind)}
-                  </p>
-                  <p className="text-xs text-mist/40">
-                    {free
-                      ? `Scarica gratis · ${storeName(best.storeId)}`
-                      : multi
-                        ? `${track.offers.length} portali · da ${storeName(best.storeId)}`
-                        : `solo ${storeName(best.storeId)}`}
-                  </p>
-                </div>
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-
-      {results.length === 0 && (
-        <p className="py-16 text-center text-mist/45">Nessuna traccia con questi filtri.</p>
-      )}
+      <div className="mt-3">
+        <ChartTable tracks={results} showRank={false} />
+      </div>
     </main>
   );
 }

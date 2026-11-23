@@ -22,34 +22,39 @@ export function TrackCard({ track, index = 0 }: Props) {
       style={{ animationDelay: `${Math.min(index, 8) * 60}ms` }}
     >
       <Link href={`/traccia/${track.id}`} className="group block">
-        <div className="relative">
+        <div className="relative border border-line">
           <CoverArt
             hue={track.coverHue}
             title={track.title}
-            className="aspect-square w-full rounded-sm transition duration-500 group-hover:scale-[1.02] group-hover:brightness-110"
+            className="aspect-square w-full transition duration-400 group-hover:brightness-110"
           />
           {free && (
-            <span className="absolute left-2 top-2 rounded-sm bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-ink">
+            <span className="absolute left-2 top-2 bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-ink">
               Free
             </span>
           )}
         </div>
         <div className="mt-3 space-y-1">
-          <p className="truncate font-display text-sm font-semibold text-mist group-hover:text-white">
+          <p className="truncate font-display text-sm font-semibold text-mist group-hover:text-signal">
             {track.title}
           </p>
-          <p className="truncate text-xs text-mist/55">{track.artist}</p>
+          <p className="truncate text-xs text-bandcamp/90">{track.artist}</p>
+          <p className="text-[0.65rem] uppercase tracking-wider text-muted">
+            {track.genre}
+            {track.bpm ? ` · ${track.bpm}` : ""}
+          </p>
           <p className="pt-1 text-xs">
             <span className="font-semibold text-signal">
               {formatPrice(best.priceEur, best.kind)}
             </span>
-            <span className="text-mist/40"> · </span>
-            <span className="text-mist/55">
+            <span className="text-muted">
+              {" "}
+              ·{" "}
               {free
-                ? `su ${storeName(best.storeId)}`
+                ? storeName(best.storeId)
                 : multi
-                  ? `da ${storeName(best.storeId)} · ${track.offers.length} portali`
-                  : `solo ${storeName(best.storeId)}`}
+                  ? `${storeName(best.storeId)} · ${track.offers.length} stores`
+                  : storeName(best.storeId)}
             </span>
           </p>
         </div>

@@ -9,7 +9,7 @@ type Props = {
 export function CoverArt({ hue, title, className = "" }: Props) {
   return (
     <div
-      className={`relative overflow-hidden ${className}`}
+      className={`relative overflow-hidden rounded-none ${className}`}
       style={coverStyle(hue)}
       role="img"
       aria-label={`Cover di ${title}`}

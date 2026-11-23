@@ -11,9 +11,9 @@ import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OVUNQUE — free o prezzo più basso su tutti i portali",
+  title: "OVUNQUE — charts & store like Beatport + Bandcamp",
   description:
-    "Scansiona Beatport, Bandcamp, SoundCloud e gli altri. Se è gratis scarichi free; se è a pagamento, vince chi costa meno.",
+    "Top charts, genres, BPM/key. Compare Beatport, Bandcamp and more — free wins, else cheapest store.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -25,9 +25,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {children}
           <footer className="mt-20 border-t border-white/10 px-5 py-10 text-sm text-mist/40 md:px-10">
             <p className="font-display font-semibold text-mist/60">OVUNQUE</p>
-            <p className="mt-2 max-w-xl">
-              Marketplace multi-portale + collezione stile Diggleist: free batte i pagati, e dai
-              dischi che scegli ti proponiamo i simili. Catalogo demo.
+            <p className="mt-2 max-w-xl text-muted">
+              Store energy: Beatport charts + Bandcamp artist buy. Confrontiamo i portali — free o
+              prezzo più basso. Catalogo demo.
             </p>
           </footer>
         </CollectionProvider>
