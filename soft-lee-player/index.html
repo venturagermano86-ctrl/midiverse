@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Soft Lee — Germano Ventura</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #12100e;
+      --bg1: #1c1814;
+      --ink: #ebe4d8;
+      --mute: #9a9083;
+      --line: rgba(235, 228, 216, 0.12);
+      --accent: #c4a574;
+      --accent-dim: rgba(196, 165, 116, 0.22);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 700px at 15% -10%, #2a2218 0%, transparent 55%),
+        radial-gradient(900px 600px at 100% 100%, #1a2428 0%, transparent 50%),
+        linear-gradient(160deg, var(--bg0), var(--bg1));
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 2rem 1.25rem;
+    }
+    .shell {
+      width: min(420px, 100%);
+      display: flex;
+      flex-direction: column;
+      gap: 1.75rem;
+    }
+    .brand {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2.4rem, 8vw, 3.1rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 0.95;
+      margin: 0;
+    }
+    .brand span {
+      display: block;
+      font-family: "DM Sans", sans-serif;
+      font-size: 0.72rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin-bottom: 0.55rem;
+    }
+    .lede {
+      margin: 0;
+      color: var(--mute);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      max-width: 28ch;
+    }
+    .tracks { display: flex; flex-direction: column; gap: 0.85rem; }
+    .track {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,0.03);
+      border-radius: 14px;
+      padding: 0.9rem 1rem;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 0.85rem 1rem;
+      align-items: center;
+      transition: border-color 0.25s ease, background 0.25s ease;
+    }
+    .track.active {
+      border-color: var(--accent-dim);
+      background: rgba(196, 165, 116, 0.08);
+    }
+    button.play {
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.15s ease;
+    }
+    button.play:hover { border-color: var(--accent); }
+    button.play:active { transform: scale(0.96); }
+    .track.active button.play {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #1a140e;
+    }
+    .meta { min-width: 0; }
+    .meta h2 {
+      margin: 0;
+      font-size: 0.95rem;
+      font-weight: 600;
+    }
+    .meta p {
+      margin: 0.2rem 0 0;
+      font-size: 0.78rem;
+      color: var(--mute);
+    }
+    .bar {
+      grid-column: 1 / -1;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--line);
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .bar > i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: inherit;
+      transition: width 0.08s linear;
+    }
+    .time {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--mute);
+      font-variant-numeric: tabular-nums;
+      margin-top: -0.35rem;
+    }
+    .foot {
+      font-size: 0.72rem;
+      color: var(--mute);
+      letter-spacing: 0.04em;
+    }
+    svg { width: 16px; height: 16px; fill: currentColor; }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <h1 class="brand"><span>Germano Ventura</span>Soft Lee</h1>
+      <p class="lede">Demo Villalobos-style · 124 BPM · dry call + wet response</p>
+    </header>
+
+    <section class="tracks" id="tracks"></section>
+    <p class="foot">TTS mock · stems for Logic dry / Delay Designer wet</p>
+  </main>
+
+  <script>
+    const tracks = [
+      {
+        id: "mix",
+        title: "Mix",
+        note: "36s · kick + A/B call-response",
+        src: "audio/mix.mp3",
+      },
+      {
+        id: "dry",
+        title: "Vox Dry",
+        note: "Voice A · easy lee / keep it soft",
+        src: "audio/vox-dry.mp3",
+      },
+      {
+        id: "wet",
+        title: "Vox Wet",
+        note: "Voice B · don't push hard / let it slide",
+        src: "audio/vox-wet.mp3",
+      },
+    ];
+
+    const iconPlay = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`;
+    const iconPause = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>`;
+
+    const root = document.getElementById("tracks");
+    const players = new Map();
+
+    function fmt(t) {
+      if (!Number.isFinite(t)) return "0:00";
+      const m = Math.floor(t / 60);
+      const s = Math.floor(t % 60).toString().padStart(2, "0");
+      return `${m}:${s}`;
+    }
+
+    function stopOthers(except) {
+      for (const [id, p] of players) {
+        if (id !== except) {
+          p.audio.pause();
+          p.el.classList.remove("active");
+          p.btn.innerHTML = iconPlay;
+        }
+      }
+    }
+
+    tracks.forEach((t) => {
+      const el = document.createElement("article");
+      el.className = "track";
+      el.innerHTML = `
+        <button class="play" type="button" aria-label="Play ${t.title}">${iconPlay}</button>
+        <div class="meta"><h2>${t.title}</h2><p>${t.note}</p></div>
+        <div class="bar" role="slider" aria-label="Seek"><i></i></div>
+        <div class="time"><span class="cur">0:00</span><span class="dur">0:00</span></div>
+      `;
+      const audio = new Audio(t.src);
+      audio.preload = "metadata";
+      const btn = el.querySelector("button.play");
+      const fill = el.querySelector(".bar > i");
+      const bar = el.querySelector(".bar");
+      const cur = el.querySelector(".cur");
+      const dur = el.querySelector(".dur");
+
+      audio.addEventListener("loadedmetadata", () => { dur.textContent = fmt(audio.duration); });
+      audio.addEventListener("timeupdate", () => {
+        cur.textContent = fmt(audio.currentTime);
+        const p = audio.duration ? (audio.currentTime / audio.duration) * 100 : 0;
+        fill.style.width = `${p}%`;
+      });
+      audio.addEventListener("ended", () => {
+        el.classList.remove("active");
+        btn.innerHTML = iconPlay;
+        fill.style.width = "0%";
+        cur.textContent = "0:00";
+      });
+
+      btn.addEventListener("click", () => {
+        if (audio.paused) {
+          stopOthers(t.id);
+          audio.play();
+          el.classList.add("active");
+          btn.innerHTML = iconPause;
+        } else {
+          audio.pause();
+          el.classList.remove("active");
+          btn.innerHTML = iconPlay;
+        }
+      });
+
+      bar.addEventListener("click", (e) => {
+        const r = bar.getBoundingClientRect();
+        const ratio = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+        if (audio.duration) audio.currentTime = ratio * audio.duration;
+      });
+
+      players.set(t.id, { audio, el, btn });
+      root.appendChild(el);
+    });
+  </script>
+</body>
+</html>
