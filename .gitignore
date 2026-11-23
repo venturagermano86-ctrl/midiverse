@@ -1,0 +1,9 @@
+# Generated house vocals (re-run ./genera_vox.sh)
+demo_vocals/*.wav
+demo_vocals/*__meta.json
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+.DS_Store
