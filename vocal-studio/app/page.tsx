@@ -16,6 +16,9 @@ type Analysis = {
   key?: string;
   label?: string;
   bank?: string;
+  packId?: string;
+  voice?: string;
+  wetVoice?: string;
   dry?: string[];
   wet?: string[];
   note?: string;
@@ -392,11 +395,12 @@ export default function VocalStudioPage() {
               </p>
             )}
             <p className="mt-2 text-mute">
-              Mood: <span className="text-ink">{analysis.label}</span>
+              Pack: <span className="text-ink">{analysis.label}</span>
+              {analysis.voice
+                ? ` · voci ${analysis.voice}${analysis.wetVoice ? ` + ${analysis.wetVoice}` : ""}`
+                : ""}
               {analysis.bpm ? ` · ${Math.round(analysis.bpm)} BPM` : ""}
               {analysis.key ? ` · ${analysis.key}` : ""}
-              {analysis.sourceMode === "meta" ? " · da titolo link" : ""}
-              {analysis.sourceMode === "audio" ? " · da audio" : ""}
             </p>
             {(analysis.dry || analysis.wet) && (
               <p className="mt-2 text-mute">
