@@ -3,7 +3,8 @@ import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
-import { getVariation } from "@/lib/genres";
+import { getGenre, getVariation } from "@/lib/genres";
+import { clampBpm, pitchNudgeForKey } from "@/lib/keys";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -109,6 +110,13 @@ export async function POST(req: NextRequest) {
     const lengthSec = Number(form.get("lengthSec") || 32);
     const mode = String(form.get("mode") || "generate");
     const sourceUrl = String(form.get("sourceUrl") || "").trim();
+    const bpmRaw = form.get("bpm");
+    const keyId = String(form.get("key") || "Am").trim() || "Am";
+    const userBpm =
+      bpmRaw !== null && String(bpmRaw).trim() !== ""
+        ? clampBpm(Number(bpmRaw))
+        : null;
+    const keyNudge = pitchNudgeForKey(keyId);
     const variation = getVariation(genreId, variationId);
 
     if (mode !== "reference" && !variation) {
@@ -167,13 +175,39 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Prefer user BPM; else analysis; else genre mid hint; else 124
+    const genre = getGenre(genreId);
+    const genreMid = genre
+      ? Math.round((genre.bpmHint[0] + genre.bpmHint[1]) / 2)
+      : 124;
+    const defaultBpm =
+      userBpm ??
+      (typeof analysisFromUrl?.bpm === "number"
+        ? clampBpm(analysisFromUrl.bpm as number)
+        : genreMid);
+
+    const baseRate = (variation?.rate ?? -18) + keyNudge.rateNudge;
+    const basePitch = (variation?.pitchHz ?? 0) + keyNudge.pitchHz;
+
+    if (analysisFromUrl) {
+      analysisFromUrl = {
+        ...analysisFromUrl,
+        key: keyId,
+        ...(userBpm ? { bpm: userBpm } : {}),
+        pitchHz: Number(analysisFromUrl.pitchHz ?? 0) + keyNudge.pitchHz,
+        rate: Number(analysisFromUrl.rate ?? -18) + keyNudge.rateNudge,
+      };
+    }
+
     const config = {
       mode,
       lengthSec: Math.min(90, Math.max(12, lengthSec)),
-      bpm: 124,
+      bpm: defaultBpm,
+      userBpm: userBpm ?? undefined,
+      key: keyId,
       voice: variation?.voice || "jenny",
-      rate: variation?.rate ?? -18,
-      pitchHz: variation?.pitchHz ?? 0,
+      rate: baseRate,
+      pitchHz: basePitch,
       dry: variation?.phrases.dry || ["hold the mark"],
       wet: variation?.phrases.wet || ["don't let go"],
       trackPath,

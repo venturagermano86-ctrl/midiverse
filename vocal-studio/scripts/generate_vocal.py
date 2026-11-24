@@ -144,6 +144,9 @@ def main() -> int:
     track_path = cfg.get("trackPath") or ""
     analysis_meta = cfg.get("analysis") or {}
 
+    user_bpm = cfg.get("userBpm")
+    key_id = str(cfg.get("key") or "Am")
+
     # Reference mode: audio analysis, or precomputed meta (YouTube title fallback)
     if mode == "reference":
         if track_path and Path(track_path).exists():
@@ -160,8 +163,14 @@ def main() -> int:
         pitch_hz = int(analysis_meta["pitchHz"])
         dry_phrases = analysis_meta["dry"]
         wet_phrases = analysis_meta["wet"]
-        if analysis_meta.get("bpm"):
+        if user_bpm is not None:
+            bpm = float(user_bpm)
+        elif analysis_meta.get("bpm"):
             bpm = float(analysis_meta["bpm"])
+        analysis_meta["key"] = key_id
+        analysis_meta["bpm"] = round(float(bpm), 1)
+    elif user_bpm is not None:
+        bpm = float(user_bpm)
 
     voice = VOICE_MAP.get(voice_key, VOICE_MAP["jenny"])
     n = int(SR * length_sec)
@@ -272,8 +281,17 @@ def main() -> int:
             stderr=subprocess.DEVNULL,
         )
         payload = {"wav": str(out), "mp3": str(mp3)}
-        if analysis_meta:
-            payload["analysis"] = analysis_meta
+        if not analysis_meta:
+            analysis_meta = {
+                "bpm": round(float(bpm), 1),
+                "key": key_id,
+                "label": "Custom",
+                "note": f"BPM {round(float(bpm))} · chiave {key_id}",
+            }
+        else:
+            analysis_meta.setdefault("bpm", round(float(bpm), 1))
+            analysis_meta["key"] = key_id
+        payload["analysis"] = analysis_meta
         print(json.dumps(payload))
     return 0
 

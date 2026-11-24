@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { GENRES } from "@/lib/genres";
+import { BPM_PRESETS, KEYS } from "@/lib/keys";
 
 const LENGTHS = [
   { sec: 16, label: "16s" },
@@ -12,6 +13,7 @@ const LENGTHS = [
 
 type Analysis = {
   bpm?: number;
+  key?: string;
   label?: string;
   bank?: string;
   dry?: string[];
@@ -36,6 +38,8 @@ export default function VocalStudioPage() {
     "reference"
   );
   const [lengthSec, setLengthSec] = useState(32);
+  const [bpm, setBpm] = useState(124);
+  const [keyId, setKeyId] = useState("Am");
   const [track, setTrack] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -47,6 +51,8 @@ export default function VocalStudioPage() {
     setGenreId(id);
     const g = GENRES.find((x) => x.id === id)!;
     setVariationId(g.variations[0].id);
+    const mid = Math.round((g.bpmHint[0] + g.bpmHint[1]) / 2);
+    setBpm(mid);
   }
 
   async function onGenerate() {
@@ -68,6 +74,8 @@ export default function VocalStudioPage() {
       body.set("variationId", variation.id);
       body.set("lengthSec", String(lengthSec));
       body.set("mode", mode);
+      body.set("bpm", String(bpm));
+      body.set("key", keyId);
       if (track) body.set("track", track);
       if (url) body.set("sourceUrl", url);
 
@@ -79,7 +87,12 @@ export default function VocalStudioPage() {
       const encoded = res.headers.get("X-Vocal-Analysis");
       if (encoded) {
         try {
-          setAnalysis(JSON.parse(decodeURIComponent(encoded)));
+          const a = JSON.parse(decodeURIComponent(encoded)) as Analysis;
+          setAnalysis(a);
+          if (typeof a.bpm === "number" && Number.isFinite(a.bpm)) {
+            setBpm(Math.round(a.bpm));
+          }
+          if (a.key) setKeyId(a.key);
         } catch {
           /* ignore */
         }
@@ -266,7 +279,62 @@ export default function VocalStudioPage() {
 
         <div>
           <h2 className="mb-3 text-sm font-medium text-mute">
-            {mode === "reference" ? "3" : needsSource ? "5" : "4"} · Lunghezza
+            {mode === "reference" ? "3" : needsSource ? "5" : "4"} · BPM
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {BPM_PRESETS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setBpm(p)}
+                className={`rounded-full border px-3 py-2 text-sm ${
+                  bpm === p
+                    ? "border-accent bg-accent text-[#1a140e]"
+                    : "border-surface-border bg-surface text-ink"
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+            <label className="ml-1 flex items-center gap-2 text-sm text-mute">
+              custom
+              <input
+                type="number"
+                min={90}
+                max={150}
+                value={bpm}
+                onChange={(e) => setBpm(Number(e.target.value) || 124)}
+                className="w-20 rounded-lg border border-surface-border bg-surface px-2 py-1.5 text-ink outline-none focus:border-accent/50"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-mute">
+            {mode === "reference" ? "4" : needsSource ? "6" : "5"} · Chiave
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {KEYS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setKeyId(k.id)}
+                className={`rounded-full border px-3 py-2 text-sm ${
+                  keyId === k.id
+                    ? "border-accent bg-accent text-[#1a140e]"
+                    : "border-surface-border bg-surface text-ink"
+                }`}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-mute">
+            {mode === "reference" ? "5" : needsSource ? "7" : "6"} · Lunghezza
           </h2>
           <div className="flex flex-wrap gap-2">
             {LENGTHS.map((l) => (
@@ -325,7 +393,8 @@ export default function VocalStudioPage() {
             )}
             <p className="mt-2 text-mute">
               Mood: <span className="text-ink">{analysis.label}</span>
-              {analysis.bpm ? ` · ~${Math.round(analysis.bpm)} BPM` : ""}
+              {analysis.bpm ? ` · ${Math.round(analysis.bpm)} BPM` : ""}
+              {analysis.key ? ` · ${analysis.key}` : ""}
               {analysis.sourceMode === "meta" ? " · da titolo link" : ""}
               {analysis.sourceMode === "audio" ? " · da audio" : ""}
             </p>
