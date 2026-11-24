@@ -17,6 +17,9 @@ type Analysis = {
   dry?: string[];
   wet?: string[];
   note?: string;
+  sourceTitle?: string;
+  sourceAuthor?: string;
+  sourceMode?: string;
 };
 
 export default function VocalStudioPage() {
@@ -34,6 +37,7 @@ export default function VocalStudioPage() {
   );
   const [lengthSec, setLengthSec] = useState(32);
   const [track, setTrack] = useState<File | null>(null);
+  const [sourceUrl, setSourceUrl] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
@@ -52,12 +56,12 @@ export default function VocalStudioPage() {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setAudioUrl(null);
     try {
-      if ((mode === "overlay" || mode === "reference") && !track) {
-        throw new Error(
-          mode === "reference"
-            ? "Carica la traccia col vocal che ti piace."
-            : "Carica una traccia per aggiungere il vocal."
-        );
+      const url = sourceUrl.trim();
+      if (mode === "reference" && !track && !url) {
+        throw new Error("Incolla un link YouTube, oppure carica la traccia.");
+      }
+      if (mode === "overlay" && !track && !url) {
+        throw new Error("Carica la tua traccia (o un link).");
       }
       const body = new FormData();
       body.set("genreId", genre.id);
@@ -65,6 +69,7 @@ export default function VocalStudioPage() {
       body.set("lengthSec", String(lengthSec));
       body.set("mode", mode);
       if (track) body.set("track", track);
+      if (url) body.set("sourceUrl", url);
 
       const res = await fetch("/api/generate", { method: "POST", body });
       if (!res.ok) {
@@ -88,7 +93,7 @@ export default function VocalStudioPage() {
     }
   }
 
-  const needsUpload = mode === "overlay" || mode === "reference";
+  const needsSource = mode === "overlay" || mode === "reference";
   const showGenre = mode !== "reference";
 
   return (
@@ -101,9 +106,9 @@ export default function VocalStudioPage() {
           Vocal Studio
         </h1>
         <p className="mt-4 max-w-lg text-[1.02rem] leading-relaxed text-mute">
-          Ti piace il vocal di una traccia? Caricala: ti diamo un vocal{" "}
+          Ti piace un vocal? Incolla il link YouTube — ti diamo un cantato{" "}
           <em className="text-ink not-italic">simile di mood</em>, originale e
-          usabile — non una copia.
+          usabile. Oppure carica il file.
         </p>
       </header>
 
@@ -116,7 +121,7 @@ export default function VocalStudioPage() {
                 {
                   id: "reference" as const,
                   title: "Simile a questo",
-                  blurb: "Upload riferimento → vocal originale nello stesso mood",
+                  blurb: "Link YouTube o file → vocal originale stesso mood",
                 },
                 {
                   id: "generate" as const,
@@ -147,29 +152,52 @@ export default function VocalStudioPage() {
           </div>
         </div>
 
-        {needsUpload && (
-          <div>
-            <h2 className="mb-3 text-sm font-medium text-mute">
-              {mode === "reference"
-                ? "2 · Traccia di riferimento (col vocal che ti piace)"
-                : "2 · La tua traccia"}
-            </h2>
-            <label className="flex cursor-pointer flex-col items-start gap-2 rounded-xl border border-dashed border-surface-border bg-surface px-4 py-5 transition hover:border-accent/40">
-              <span className="text-sm font-medium">
-                {track ? track.name : "WAV / MP3 / AIFF"}
-              </span>
-              <span className="text-[0.75rem] text-mute">
+        {needsSource && (
+          <div className="flex flex-col gap-4">
+            <div>
+              <h2 className="mb-3 text-sm font-medium text-mute">
                 {mode === "reference"
-                  ? "Ascoltiamo mood/tempo/timbrica — non copiamo il testo"
-                  : "Max consigliato ~3 min per la demo"}
-              </span>
+                  ? "2 · Link YouTube (il più facile)"
+                  : "2 · Link oppure file"}
+              </h2>
               <input
-                type="file"
-                accept="audio/*"
-                className="hidden"
-                onChange={(e) => setTrack(e.target.files?.[0] || null)}
+                type="url"
+                inputMode="url"
+                autoCapitalize="off"
+                autoCorrect="off"
+                spellCheck={false}
+                placeholder="https://youtu.be/… oppure youtube.com/watch?v=…"
+                value={sourceUrl}
+                onChange={(e) => setSourceUrl(e.target.value)}
+                className="w-full rounded-xl border border-surface-border bg-surface px-4 py-3.5 text-[0.95rem] text-ink outline-none ring-accent/40 placeholder:text-mute/70 focus:border-accent/50 focus:ring-2"
               />
-            </label>
+              <p className="mt-2 text-[0.75rem] text-mute">
+                Incolla e genera. Se YouTube blocca l’audio dal server, usiamo
+                titolo/artista per il mood — e puoi sempre caricare il file sotto.
+              </p>
+            </div>
+
+            <div>
+              <h2 className="mb-3 text-sm font-medium text-mute">
+                oppure carica un file
+              </h2>
+              <label className="flex cursor-pointer flex-col items-start gap-2 rounded-xl border border-dashed border-surface-border bg-surface px-4 py-5 transition hover:border-accent/40">
+                <span className="text-sm font-medium">
+                  {track ? track.name : "WAV / MP3 / AIFF"}
+                </span>
+                <span className="text-[0.75rem] text-mute">
+                  {mode === "reference"
+                    ? "Analisi audio completa (tempo/timbrica) se hai il file"
+                    : "Max consigliato ~3 min per la demo"}
+                </span>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  className="hidden"
+                  onChange={(e) => setTrack(e.target.files?.[0] || null)}
+                />
+              </label>
+            </div>
           </div>
         )}
 
@@ -177,7 +205,7 @@ export default function VocalStudioPage() {
           <>
             <div>
               <h2 className="mb-3 text-sm font-medium text-mute">
-                {needsUpload ? "3" : "2"} · Genere
+                {needsSource ? "3" : "2"} · Genere
               </h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {GENRES.map((g) => {
@@ -205,7 +233,7 @@ export default function VocalStudioPage() {
 
             <div>
               <h2 className="mb-3 text-sm font-medium text-mute">
-                {needsUpload ? "4" : "3"} · Variazione · {genre.label}
+                {needsSource ? "4" : "3"} · Variazione · {genre.label}
               </h2>
               <div className="flex flex-col gap-2">
                 {genre.variations.map((v) => {
@@ -238,7 +266,7 @@ export default function VocalStudioPage() {
 
         <div>
           <h2 className="mb-3 text-sm font-medium text-mute">
-            {mode === "reference" ? "3" : needsUpload ? "5" : "4"} · Lunghezza
+            {mode === "reference" ? "3" : needsSource ? "5" : "4"} · Lunghezza
           </h2>
           <div className="flex flex-wrap gap-2">
             {LENGTHS.map((l) => (
@@ -267,7 +295,7 @@ export default function VocalStudioPage() {
           >
             {busy
               ? mode === "reference"
-                ? "Ascolto il riferimento e genero…"
+                ? "Leggo il riferimento e genero…"
                 : "Genero il vocal…"
               : mode === "reference"
                 ? "Dammi un vocal simile (originale)"
@@ -285,9 +313,21 @@ export default function VocalStudioPage() {
         {analysis && (
           <div className="rounded-2xl border border-surface-border bg-surface p-4 text-sm">
             <h2 className="font-semibold">Cosa abbiamo sentito</h2>
+            {(analysis.sourceTitle || analysis.sourceAuthor) && (
+              <p className="mt-2 text-mute">
+                Riferimento:{" "}
+                <span className="text-ink">
+                  {[analysis.sourceTitle, analysis.sourceAuthor]
+                    .filter(Boolean)
+                    .join(" — ")}
+                </span>
+              </p>
+            )}
             <p className="mt-2 text-mute">
               Mood: <span className="text-ink">{analysis.label}</span>
               {analysis.bpm ? ` · ~${Math.round(analysis.bpm)} BPM` : ""}
+              {analysis.sourceMode === "meta" ? " · da titolo link" : ""}
+              {analysis.sourceMode === "audio" ? " · da audio" : ""}
             </p>
             {(analysis.dry || analysis.wet) && (
               <p className="mt-2 text-mute">
@@ -329,9 +369,9 @@ export default function VocalStudioPage() {
       </section>
 
       <footer className="mt-14 text-[0.75rem] leading-relaxed text-mute">
-        Modalità riferimento: analizziamo tempo/energia/timbrica e generiamo un
-        vocal nuovo nello stesso mood. Non cloniamo la voce né il testo della
-        traccia caricata. Demo TTS — motore da studio collegabile dopo.
+        Link YouTube: analizziamo il mood (audio se scaricabile, altrimenti
+        titolo/artista) e generiamo un vocal nuovo. Non cloniamo voce né testo.
+        Demo TTS — motore da studio collegabile dopo.
       </footer>
     </main>
   );

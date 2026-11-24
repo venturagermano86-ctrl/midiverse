@@ -144,11 +144,17 @@ def main() -> int:
     track_path = cfg.get("trackPath") or ""
     analysis_meta = cfg.get("analysis") or {}
 
-    # Reference mode: analyze uploaded track → original similar vocal params
-    if mode == "reference" and track_path and Path(track_path).exists():
-        import analyze_reference
+    # Reference mode: audio analysis, or precomputed meta (YouTube title fallback)
+    if mode == "reference":
+        if track_path and Path(track_path).exists():
+            import analyze_reference
 
-        analysis_meta = analyze_reference.analyze(Path(track_path))
+            analysis_meta = analyze_reference.analyze(Path(track_path))
+        elif analysis_meta:
+            pass  # already provided (e.g. YouTube oEmbed mood)
+        else:
+            raise SystemExit("reference mode needs trackPath or analysis")
+
         voice_key = analysis_meta["voice"]
         rate = int(analysis_meta["rate"])
         pitch_hz = int(analysis_meta["pitchHz"])

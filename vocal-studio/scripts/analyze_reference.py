@@ -81,6 +81,99 @@ def ffmpeg_mono(path: Path, out: Path, max_sec: float = 90) -> None:
     )
 
 
+def _pick_phrases(bank: str, seed_src: str) -> dict:
+    style = BANKS[bank]
+    digest = hashlib.sha256(seed_src.encode("utf-8")).hexdigest()
+    seed = int(digest[:8], 16)
+    rng = np.random.default_rng(seed)
+    dry = list(rng.choice(style["dry"], size=min(2, len(style["dry"])), replace=False))
+    wet = list(rng.choice(style["wet"], size=min(2, len(style["wet"])), replace=False))
+    return {
+        "bank": bank,
+        "label": style["label"],
+        "voice": style["voice"],
+        "rate": int(style["rate"]),
+        "pitchHz": int(style["pitchHz"]),
+        "dry": [str(x) for x in dry],
+        "wet": [str(x) for x in wet],
+    }
+
+
+# Title/artist keywords → mood when we can't download the audio (YouTube bot walls)
+META_KEYWORDS = {
+    "celestial": (
+        "celestial", "airy", "ambient", "villalobos", "soft lee", "easy lee",
+        "float", "glow", "dream", "voice resurrection", "minimal", "hypnotic",
+        "space", "ethereal", "whisper",
+    ),
+    "soul": (
+        "soul", "nina", "gospel", "deep house", "blues", "heart", "love song",
+        "ballad", "al green", "motown", "r&b", "rnb",
+    ),
+    "cold": (
+        "techno", "industrial", "berghain", "cold", "acid", "warehouse",
+        "peak time", "hardgroove", "detroit",
+    ),
+    "warm": (
+        "afro", "disco", "nu-disco", "sunshine", "tropical", "organic",
+        "percussion", "latin", "balearic",
+    ),
+    "club": (
+        "tech house", "club", "peak", "groove", "bassline", "festival",
+    ),
+}
+
+
+def analyze_from_meta(
+    *,
+    title: str = "",
+    author: str = "",
+    url: str = "",
+    bpm_hint: float | None = None,
+) -> dict:
+    """Mood from YouTube/SoundCloud title when audio download is blocked."""
+    blob = f"{title} {author}".lower()
+    scores = {k: 0 for k in META_KEYWORDS}
+    for bank, words in META_KEYWORDS.items():
+        for w in words:
+            if w in blob:
+                scores[bank] += 1 + (2 if len(w) > 8 else 0)
+    bank = max(scores, key=scores.get) if max(scores.values()) > 0 else "celestial"
+    # House/techno YouTube refs often want celestial or club as default
+    if max(scores.values()) == 0 and any(
+        x in blob for x in ("house", "mix", "remix", "edit", "dj")
+    ):
+        bank = "club"
+
+    picked = _pick_phrases(bank, f"{url}|{title}|{author}")
+    bpm = float(bpm_hint) if bpm_hint else {
+        "soul": 112.0,
+        "celestial": 120.0,
+        "warm": 122.0,
+        "club": 124.0,
+        "cold": 132.0,
+    }.get(bank, 124.0)
+
+    if bank == "soul":
+        picked["pitchHz"] -= 3
+        picked["rate"] -= 2
+    if bank == "celestial":
+        picked["rate"] -= 4
+
+    return {
+        **picked,
+        "bpm": bpm,
+        "sourceTitle": title,
+        "sourceAuthor": author,
+        "sourceUrl": url,
+        "sourceMode": "meta",
+        "note": (
+            "Mood dal titolo/artista del link (audio YouTube non scaricabile da qui). "
+            "Frasi originali — non copia il testo del video."
+        ),
+    }
+
+
 def analyze(path: Path) -> dict:
     import librosa
 
@@ -110,7 +203,6 @@ def analyze(path: Path) -> dict:
         bright = cent > 2200
         deep = cent < 1600
         sparse = rms < 0.06
-        dense = rms > 0.12
         coldish = flat > 0.04 and zcr > 0.08
         warmish = not coldish and rolloff < 4500
 
@@ -125,17 +217,10 @@ def analyze(path: Path) -> dict:
         else:
             bank = "club"
 
-        style = BANKS[bank]
-        # Stable but different phrase pick per reference file
-        digest = hashlib.sha256(path.read_bytes()[: 256_000]).hexdigest()
-        seed = int(digest[:8], 16)
-        rng = np.random.default_rng(seed)
-        dry = list(rng.choice(style["dry"], size=min(2, len(style["dry"])), replace=False))
-        wet = list(rng.choice(style["wet"], size=min(2, len(style["wet"])), replace=False))
-
-        # Nudge rate/pitch from analysis (still original text)
-        rate = int(style["rate"])
-        pitch = int(style["pitchHz"])
+        seed = hashlib.sha256(path.read_bytes()[: 256_000]).hexdigest()
+        picked = _pick_phrases(bank, seed)
+        rate = int(picked["rate"])
+        pitch = int(picked["pitchHz"])
         if deep:
             pitch -= 2
             rate -= 2
@@ -145,16 +230,13 @@ def analyze(path: Path) -> dict:
             rate -= 3
 
         return {
+            **picked,
+            "rate": rate,
+            "pitchHz": pitch,
             "bpm": round(float(tempo), 1),
             "brightness": round(cent, 1),
             "energy": round(rms, 4),
-            "bank": bank,
-            "label": style["label"],
-            "voice": style["voice"],
-            "rate": rate,
-            "pitchHz": pitch,
-            "dry": [str(x) for x in dry],
-            "wet": [str(x) for x in wet],
+            "sourceMode": "audio",
             "note": "Original phrases — mood matched to reference, not a lyric copy.",
         }
 

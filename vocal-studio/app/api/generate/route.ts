@@ -6,7 +6,7 @@ import os from "os";
 import { getVariation } from "@/lib/genres";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 180;
 
 type PyResult = { wav: string; mp3: string; analysis?: Record<string, unknown> };
 
@@ -17,7 +17,10 @@ function runPython(configPath: string, outWav: string, bedWav: string) {
       "python3",
       [script, "--config", configPath, "--out", outWav, "--bed-out", bedWav],
       {
-        env: process.env,
+        env: {
+          ...process.env,
+          PATH: `${process.env.HOME}/.local/bin:${process.env.HOME}/.deno/bin:${process.env.PATH || ""}`,
+        },
         cwd: path.join(process.cwd(), "scripts"),
       }
     );
@@ -40,6 +43,64 @@ function runPython(configPath: string, outWav: string, bedWav: string) {
   });
 }
 
+type FetchResult = {
+  ok: boolean;
+  trackPath?: string;
+  analysis?: Record<string, unknown>;
+  meta?: { title?: string; author?: string };
+  error?: string;
+  fallback?: string;
+};
+
+function fetchReferenceUrl(url: string, outDir: string) {
+  return new Promise<FetchResult>((resolve, reject) => {
+    const script = path.join(process.cwd(), "scripts", "fetch_reference_url.py");
+    const proc = spawn(
+      "python3",
+      [script, "--url", url, "--out-dir", outDir],
+      {
+        env: {
+          ...process.env,
+          PATH: `${process.env.HOME}/.local/bin:${process.env.HOME}/.deno/bin:${process.env.PATH || ""}`,
+        },
+        cwd: path.join(process.cwd(), "scripts"),
+      }
+    );
+    let stdout = "";
+    let stderr = "";
+    proc.stdout.on("data", (d) => (stdout += d.toString()));
+    proc.stderr.on("data", (d) => (stderr += d.toString()));
+    proc.on("close", (code) => {
+      try {
+        const line = stdout.trim().split("\n").filter(Boolean).pop() || "{}";
+        const data = JSON.parse(line) as FetchResult;
+        if (!data.ok && code !== 0) {
+          reject(new Error(data.error || stderr || "Fetch URL fallito"));
+          return;
+        }
+        resolve(data);
+      } catch {
+        reject(new Error(stderr || "Fetch URL fallito"));
+      }
+    });
+  });
+}
+
+function looksLikeMediaUrl(raw: string) {
+  try {
+    const u = new URL(raw.trim().startsWith("http") ? raw.trim() : `https://${raw.trim()}`);
+    const host = u.hostname.replace(/^www\./, "").toLowerCase();
+    return (
+      host.includes("youtube.com") ||
+      host === "youtu.be" ||
+      host.includes("soundcloud.com") ||
+      host.includes("youtu.be")
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
@@ -47,6 +108,7 @@ export async function POST(req: NextRequest) {
     const variationId = String(form.get("variationId") || "");
     const lengthSec = Number(form.get("lengthSec") || 32);
     const mode = String(form.get("mode") || "generate");
+    const sourceUrl = String(form.get("sourceUrl") || "").trim();
     const variation = getVariation(genreId, variationId);
 
     if (mode !== "reference" && !variation) {
@@ -55,6 +117,8 @@ export async function POST(req: NextRequest) {
 
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vocal-studio-"));
     let trackPath = "";
+    let analysisFromUrl: Record<string, unknown> | undefined;
+
     const file = form.get("track");
     if ((mode === "overlay" || mode === "reference") && file && typeof file !== "string") {
       const bytes = Buffer.from(await file.arrayBuffer());
@@ -63,9 +127,42 @@ export async function POST(req: NextRequest) {
       await fs.writeFile(trackPath, bytes);
     }
 
-    if (mode === "reference" && !trackPath) {
+    // YouTube / SoundCloud link (reference or overlay)
+    if (sourceUrl && (mode === "reference" || mode === "overlay") && !trackPath) {
+      if (!looksLikeMediaUrl(sourceUrl)) {
+        return NextResponse.json(
+          { error: "Incolla un link YouTube o SoundCloud valido." },
+          { status: 400 }
+        );
+      }
+      const fetched = await fetchReferenceUrl(sourceUrl, path.join(tmp, "urlref"));
+      if (!fetched.ok && !fetched.analysis) {
+        return NextResponse.json(
+          {
+            error:
+              fetched.error ||
+              "Non riesco a leggere quel link. Prova a caricare l'MP3 della traccia.",
+          },
+          { status: 400 }
+        );
+      }
+      if (fetched.trackPath) trackPath = fetched.trackPath;
+      if (fetched.analysis) analysisFromUrl = fetched.analysis;
+    }
+
+    if (mode === "reference" && !trackPath && !analysisFromUrl) {
       return NextResponse.json(
-        { error: "Carica una traccia di riferimento col vocal che ti piace." },
+        {
+          error:
+            "Incolla un link YouTube (o SoundCloud), oppure carica la traccia col vocal che ti piace.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (mode === "overlay" && !trackPath) {
+      return NextResponse.json(
+        { error: "Carica la tua traccia (o un link se scaricabile) per aggiungere il vocal." },
         { status: 400 }
       );
     }
@@ -80,6 +177,7 @@ export async function POST(req: NextRequest) {
       dry: variation?.phrases.dry || ["hold the mark"],
       wet: variation?.phrases.wet || ["don't let go"],
       trackPath,
+      analysis: analysisFromUrl || undefined,
     };
     const configPath = path.join(tmp, "config.json");
     const outWav = path.join(tmp, "mix.wav");
@@ -90,8 +188,7 @@ export async function POST(req: NextRequest) {
     const mp3Path = result.mp3 || outWav.replace(/\.wav$/, ".mp3");
     const mp3 = await fs.readFile(mp3Path);
 
-    // Persist analysis sidecar for the response header
-    const analysis = result.analysis || null;
+    const analysis = result.analysis || analysisFromUrl || null;
     fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
 
     return new NextResponse(mp3, {
@@ -110,7 +207,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         error: message,
-        hint: "Demo TTS: mood dal riferimento, frasi originali (non copia il testo).",
+        hint: "Incolla un link YouTube o carica un file. Mood dal riferimento, frasi originali.",
       },
       { status: 500 }
     );
