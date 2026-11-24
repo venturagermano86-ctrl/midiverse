@@ -4,9 +4,21 @@ type Props = {
   hue: number;
   title: string;
   className?: string;
+  artworkUrl?: string;
 };
 
-export function CoverArt({ hue, title, className = "" }: Props) {
+export function CoverArt({ hue, title, className = "", artworkUrl }: Props) {
+  if (artworkUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={artworkUrl}
+        alt={`Cover di ${title}`}
+        className={`object-cover ${className}`}
+      />
+    );
+  }
+
   return (
     <div
       className={`relative overflow-hidden rounded-none ${className}`}

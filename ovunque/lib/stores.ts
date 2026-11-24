@@ -1,6 +1,6 @@
 import type { StoreId, StoreMeta } from "./types";
 
-/** Registro portali monitorati dal motore OVUNQUE. */
+/** Registro portali — store DJ reali collegati via deep-link / prezzo live. */
 export const STORES: Record<StoreId, StoreMeta> = {
   beatport: {
     id: "beatport",
@@ -14,7 +14,7 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "Bandcamp",
     short: "BC",
     kind: "hybrid",
-    blurb: "Artist-direct, spesso FLAC / name-your-price",
+    blurb: "Artist-direct, FLAC / name-your-price",
   },
   traxsource: {
     id: "traxsource",
@@ -65,12 +65,33 @@ export const STORES: Record<StoreId, StoreMeta> = {
     kind: "shop",
     blurb: "Berlin techno / dub",
   },
+  decks: {
+    id: "decks",
+    name: "Decks.de",
+    short: "DK",
+    kind: "shop",
+    blurb: "Vinyl + digital EU",
+  },
+  roughtrade: {
+    id: "roughtrade",
+    name: "Rough Trade",
+    short: "RT",
+    kind: "shop",
+    blurb: "Indie / electronic shop",
+  },
+  discogs: {
+    id: "discogs",
+    name: "Discogs Marketplace",
+    short: "DG",
+    kind: "shop",
+    blurb: "Marketplace vinile / digi",
+  },
   apple: {
     id: "apple",
     name: "Apple Music",
     short: "AM",
     kind: "shop",
-    blurb: "Download AAC",
+    blurb: "Download AAC — prezzo live",
   },
   amazon: {
     id: "amazon",
@@ -84,21 +105,21 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "SoundCloud",
     short: "SC",
     kind: "free",
-    blurb: "Download gratis quando l’artista lo abilita",
+    blurb: "Free DL se l’artista lo abilita",
   },
   youtube: {
     id: "youtube",
-    name: "YouTube Music / Free",
+    name: "YouTube Music",
     short: "YT",
     kind: "free",
-    blurb: "A volte free / promo (quando disponibile)",
+    blurb: "Ascolto / a volte free",
   },
   freesound: {
     id: "freesound",
     name: "Free artist drop",
     short: "FR",
     kind: "free",
-    blurb: "Drop diretto / freebie label",
+    blurb: "Drop diretto / freebie",
   },
 };
 

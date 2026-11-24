@@ -43,6 +43,7 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                     <CoverArt
                       hue={track.coverHue}
                       title={track.title}
+                      artworkUrl={track.artworkUrl}
                       className="h-11 w-11 shrink-0"
                     />
                     <span className="min-w-0">

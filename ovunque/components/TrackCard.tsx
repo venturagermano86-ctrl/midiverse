@@ -26,6 +26,7 @@ export function TrackCard({ track, index = 0 }: Props) {
           <CoverArt
             hue={track.coverHue}
             title={track.title}
+            artworkUrl={track.artworkUrl}
             className="aspect-square w-full transition duration-400 group-hover:brightness-110"
           />
           {free && (

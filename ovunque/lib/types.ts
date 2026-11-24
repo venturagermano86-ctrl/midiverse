@@ -8,6 +8,9 @@ export type StoreId =
   | "bleep"
   | "clone"
   | "hardwax"
+  | "decks"
+  | "roughtrade"
+  | "discogs"
   | "apple"
   | "amazon"
   | "soundcloud"
@@ -19,13 +22,13 @@ export type OfferKind = "free" | "paid";
 export type Offer = {
   storeId: StoreId;
   kind: OfferKind;
-  /** 0 = gratis. Per free resta 0. */
-  priceEur: number;
-  currency: "EUR";
+  /** 0 = gratis. null = prezzo solo sullo store (deep-link reale). */
+  priceEur: number | null;
+  currency: "EUR" | "USD";
   format: string;
   url: string;
-  /** Es. download diretto, name-your-price, streaming-only */
-  access?: "download" | "name_your_price" | "stream";
+  access?: "download" | "name_your_price" | "stream" | "search";
+  live?: boolean;
 };
 
 export type Track = {
@@ -41,9 +44,12 @@ export type Track = {
   coverHue: number;
   suggested: boolean;
   rails: string[];
-  /** Chiavi per matching cross-store (demo). */
   isrc?: string;
   offers: Offer[];
+  /** Cover reale (iTunes) se presente */
+  artworkUrl?: string;
+  previewUrl?: string;
+  source?: "curated" | "itunes" | "live";
 };
 
 export type StoreMeta = {

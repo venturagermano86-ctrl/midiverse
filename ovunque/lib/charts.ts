@@ -9,7 +9,9 @@ export function topChart(limit = 12): Track[] {
       let score = t.offers.length * 10;
       if (t.suggested) score += 8;
       if (hasFreeOffer(t)) score += 15;
-      if (best && best.kind === "paid") score += Math.max(0, 5 - best.priceEur);
+      if (best && best.kind === "paid" && best.priceEur != null) {
+        score += Math.max(0, 5 - best.priceEur);
+      }
       if (t.year >= 2025) score += 5;
       return { t, score };
     })

@@ -11,8 +11,8 @@ export function PortalStrip() {
           {STORE_ORDER.length} portali sotto scansione
         </h2>
         <p className="mt-1 max-w-2xl text-sm text-mist/50">
-          Beatport, Bandcamp, Traxsource, Juno, SoundCloud free, Clone, Hardwax e gli altri —
-          stessa traccia, free o a pagamento, vince chi costa meno (gratis batte tutto).
+          Beatport, Bandcamp, Traxsource, Juno, Decks, Discogs, Rough Trade, SoundCloud e gli altri —
+          chart live + deep-link reali. Gratis batte i pagati; altrimenti apri lo store.
         </p>
         <ul className="mt-5 flex flex-wrap gap-2">
           {STORE_ORDER.map((id) => {
