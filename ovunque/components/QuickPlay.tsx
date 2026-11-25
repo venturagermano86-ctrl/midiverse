@@ -1,26 +1,27 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { claimPreview, releasePreview } from "@/lib/previewAudio";
+import { useEffect, useState } from "react";
+import {
+  getPlayingSrc,
+  playPreview,
+  subscribePreview,
+} from "@/lib/previewAudio";
 
 type Props = {
   src?: string | null;
   title?: string;
 };
 
-/** Player rapido 1-click — apre uno, chiude gli altri. */
+/** Player rapido 1-click — un solo audio globale, mai sovrapposti. */
 export function QuickPlay({ src, title }: Props) {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const stopRef = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
-    return () => {
-      stopRef.current?.();
-      audioRef.current?.pause();
-      audioRef.current = null;
-    };
-  }, []);
+    if (!src) return;
+    return subscribePreview((current) => {
+      setPlaying(current === src);
+    });
+  }, [src]);
 
   if (!src) {
     return (
@@ -33,61 +34,13 @@ export function QuickPlay({ src, title }: Props) {
     );
   }
 
-  function ensureAudio(): HTMLAudioElement {
-    if (!audioRef.current) {
-      const a = new Audio(src!);
-      a.preload = "none";
-      a.addEventListener("ended", () => {
-        setPlaying(false);
-        if (stopRef.current) releasePreview(stopRef.current);
-      });
-      audioRef.current = a;
-    }
-    return audioRef.current;
-  }
-
-  function stopSelf() {
-    const a = audioRef.current;
-    if (a) {
-      a.pause();
-      a.currentTime = 0;
-    }
-    setPlaying(false);
-    if (stopRef.current) releasePreview(stopRef.current);
-  }
-
-  async function toggle() {
-    const a = ensureAudio();
-
-    if (playing) {
-      stopSelf();
-      return;
-    }
-
-    const stop = () => {
-      a.pause();
-      a.currentTime = 0;
-      setPlaying(false);
-    };
-    stopRef.current = stop;
-    claimPreview(stop);
-
-    try {
-      await a.play();
-      setPlaying(true);
-    } catch {
-      setPlaying(false);
-      releasePreview(stop);
-    }
-  }
-
   return (
     <button
       type="button"
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        void toggle();
+        void playPreview(src).then((on) => setPlaying(on || getPlayingSrc() === src));
       }}
       aria-label={playing ? `Stop ${title ?? ""}` : `Play ${title ?? ""}`}
       aria-pressed={playing}

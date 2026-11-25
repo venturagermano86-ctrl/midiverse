@@ -4,27 +4,32 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { RecordShelf } from "@/components/RecordShelf";
+import { loadDigPicks } from "@/lib/digPickBag";
 import type { Track } from "@/lib/types";
 
 function DigListResults() {
   const params = useSearchParams();
-  const mode = params.get("mode") === "long" ? "long" : "short";
+  const modeParam = params.get("mode") === "long" ? "long" : "short";
+  const bag = params.get("bag");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [note, setNote] = useState("Building your dig list…");
   const [seedCount, setSeedCount] = useState(0);
   const [error, setError] = useState("");
+  const [mode, setMode] = useState<"short" | "long">(modeParam);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const raw = sessionStorage.getItem("dig.pick.seeds");
-        if (!raw) {
+        const packed = loadDigPicks(bag);
+        const seeds = packed?.seeds ?? [];
+        const mode = packed?.mode === "long" || modeParam === "long" ? "long" : "short";
+        setMode(mode);
+
+        if (seeds.length === 0) {
           setError("Nessun pick — torna alla wishlist e seleziona fino a 6 dischi.");
           return;
         }
-        const parsed = JSON.parse(raw) as { seeds?: Track[]; mode?: string };
-        const seeds = parsed.seeds ?? [];
         setSeedCount(seeds.length);
         const res = await fetch("/api/diglist", {
           method: "POST",
@@ -46,7 +51,7 @@ function DigListResults() {
     return () => {
       cancelled = true;
     };
-  }, [mode]);
+  }, [modeParam, bag]);
 
   return (
     <main className="px-4 py-10 md:px-8 md:py-12">

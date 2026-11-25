@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CoverArt } from "@/components/CoverArt";
 import { HeartWish } from "@/components/HeartWish";
 import { QuickPlay } from "@/components/QuickPlay";
+import { stashDigPicks } from "@/lib/digPickBag";
 import type { Track } from "@/lib/types";
 
 const MAX_PICKS = 6;
@@ -66,10 +67,9 @@ export function PickShelf({ tracks, openInNewTab = true }: Props) {
     if (pickedTracks.length === 0) return;
     setBusy(mode);
     try {
-      // stash seeds for the results tab
-      const payload = { seeds: pickedTracks, mode };
-      sessionStorage.setItem("dig.pick.seeds", JSON.stringify(payload));
-      const url = `/diglist?mode=${mode}`;
+      // localStorage (non sessionStorage): la scheda nuova deve leggere i pick
+      const bag = stashDigPicks(mode, pickedTracks);
+      const url = `/diglist?mode=${mode}&bag=${encodeURIComponent(bag)}`;
       if (openInNewTab) {
         window.open(url, "_blank", "noopener,noreferrer");
       } else {

@@ -7,6 +7,7 @@ import { SimilarRail } from "@/components/SimilarRail";
 import { StationButton } from "@/components/StationButton";
 import { StoreOffers } from "@/components/StoreOffers";
 import { TrackCard } from "@/components/TrackCard";
+import { ExclusiveAudio } from "@/components/ExclusiveAudio";
 import { WaveformStrip } from "@/components/WaveformStrip";
 import {
   ctaLabel,
@@ -92,9 +93,10 @@ export default async function TrackPage({ params, searchParams }: Props) {
           />
           <WaveformStrip className="mt-4 max-w-sm" />
           {track.previewUrl ? (
-            <audio controls className="mt-4 w-full max-w-sm" src={track.previewUrl} preload="none">
-              Preview
-            </audio>
+            <ExclusiveAudio
+              src={track.previewUrl}
+              className="mt-4 w-full max-w-sm"
+            />
           ) : null}
         </div>
 
