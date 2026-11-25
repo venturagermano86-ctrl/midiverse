@@ -172,7 +172,6 @@ export async function POST(req: NextRequest) {
       variation?.phrases.wet ||
       ["don't let go", "open it wide"];
 
-    // Prefer shorter, cleaner phrases for HTTPS demo TTS (no elongated vowels)
     const clean = (s: string) =>
       s.replace(/(.)\1{2,}/g, "$1$1").replace(/\s+/g, " ").trim();
     const dry = dryPhrases.map(clean).slice(0, 2);
@@ -188,7 +187,8 @@ export async function POST(req: NextRequest) {
       lengthSec,
       dest: outMp3,
       elevenVoiceId: singer.elevenVoiceId,
-      edgeVoice: singer.edgeVoice,
+      edgeVoice:
+        (analysis?.voice as string | undefined) || singer.edgeVoice || "jenny",
     });
 
     const mp3 = await fs.readFile(outMp3);
@@ -198,13 +198,15 @@ export async function POST(req: NextRequest) {
       key: keyId,
       label: (analysis?.label as string) || singer.label,
       singerId: singer.id,
-      engine: engine === "elevenlabs" ? "elevenlabs" : "demo-https",
+      engine,
       dry,
       wet,
       note:
         engine === "elevenlabs"
-          ? "Voce ElevenLabs — usabile in release con piano a pagamento (termini ElevenLabs)."
-          : "Anteprima demo — NON pubblicare su label/Beatport/streaming. Aggiungi ELEVENLABS_API_KEY (piano a pagamento).",
+          ? "Cantato ElevenLabs ([sings]) — usabile in release con piano a pagamento."
+          : engine === "edge"
+            ? "Anteprima neurale (più umana della demo Google) — per release serve ElevenLabs a pagamento."
+            : "Anteprima demo — NON pubblicare. Aggiungi ELEVENLABS_API_KEY (piano a pagamento) per cantato reale.",
       releaseReady: engine === "elevenlabs",
     };
 

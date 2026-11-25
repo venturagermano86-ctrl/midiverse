@@ -155,10 +155,9 @@ export default function VocalStudioPage() {
             ))}
           </div>
           <p className="mt-2 text-[0.75rem] text-mute">
-            Per release / Beatport / streaming: serve{" "}
-            <span className="text-ink">ELEVENLABS_API_KEY</span> su piano a
-            pagamento (licenza commerciale). Senza chiave = solo anteprima demo,
-            non pubblicabile.
+            Cantato umano: ElevenLabs{" "}
+            <span className="text-ink">[sings]</span> su piano a pagamento =
+            release-ready. Senza chiave = anteprima (non Beatport).
           </p>
         </div>
 

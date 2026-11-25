@@ -29,6 +29,7 @@ type Pack = {
   pitchHz: number;
   dsp: string;
   bpm: number;
+  /** Short lyrical lines — suited to [sings] TTS, not robotic vowel spam */
   dry: string[];
   wet: string[];
 };
@@ -36,7 +37,7 @@ type Pack = {
 const PACKS: Pack[] = [
   {
     id: "celestial-jenny",
-    label: "Celestial airy · Jenny",
+    label: "Celestial airy · female",
     tags: ["celestial", "airy", "ambient", "villalobos", "soft", "float", "glow", "dream", "ethereal", "whisper", "space", "minimal"],
     voice: "jenny",
     wetVoice: "aria",
@@ -44,56 +45,56 @@ const PACKS: Pack[] = [
     pitchHz: 3,
     dsp: "airy",
     bpm: 120,
-    dry: ["sooooft throuuugh the niiight", "keeep the liiight clooose", "spiiin it sllooow"],
-    wet: ["staaay in the gloooow", "faaall into meeee", "ooopen the gaaate"],
+    dry: ["soft through the night", "keep the light close", "spin it slow for me"],
+    wet: ["stay in the glow", "fall into me", "open the gate"],
   },
   {
     id: "celestial-aria",
-    label: "Celestial lift · Aria",
+    label: "Celestial lift · female",
     tags: ["celestial", "voice", "resurrection", "easy lee", "hypnotic", "lee"],
     voice: "aria",
     wetVoice: "jenny",
     rate: -26,
-    pitchHz: 6,
+    pitchHz: 4,
     dsp: "airy",
     bpm: 121,
-    dry: ["hooold the liiight", "sliiide into quiiiet", "breeeathe with meeee"],
-    wet: ["dooown in the gloooow", "caaall me soooftly", "waaait for the waaave"],
+    dry: ["hold the light", "slide into quiet", "breathe with me"],
+    wet: ["down in the glow", "call me softly", "wait for the wave"],
   },
   {
     id: "soul-sonia",
-    label: "Soul deep · Sonia",
+    label: "Soul deep · female",
     tags: ["soul", "nina", "gospel", "deep house", "blues", "heart", "ballad", "motown"],
     voice: "sonia",
     wetVoice: "michelle",
     rate: -30,
-    pitchHz: -8,
+    pitchHz: -6,
     dsp: "chest",
     bpm: 112,
-    dry: ["hooold me cloooser", "caaarry me hooome", "dooon't you leeeave"],
-    wet: ["throoough the niiight", "I neeeed you sooo", "hooold me stiiill"],
+    dry: ["hold me closer", "carry me home", "don't you leave me"],
+    wet: ["through the night", "I need you so", "hold me still"],
   },
   {
     id: "club-aria",
-    label: "Club hook · Aria",
+    label: "Club hook · female",
     tags: ["tech house", "club", "peak", "groove", "bassline", "festival", "house", "mix"],
     voice: "aria",
     wetVoice: "emma",
-    rate: -12,
+    rate: -14,
     pitchHz: 2,
     dsp: "punch",
     bpm: 125,
-    dry: ["hold the mark", "spin the gate", "feel the bass"],
-    wet: ["don't let go", "open it wide", "keep it rolling"],
+    dry: ["hold the mark", "feel the bass now", "take me higher"],
+    wet: ["don't let go", "keep it rolling", "all night long"],
   },
   {
     id: "cold-guy",
-    label: "Cold techno · Guy",
+    label: "Cold techno · male",
     tags: ["techno", "industrial", "berghain", "cold", "acid", "warehouse", "detroit"],
     voice: "guy",
     wetVoice: "brian",
-    rate: -8,
-    pitchHz: -3,
+    rate: -10,
+    pitchHz: -2,
     dsp: "cold",
     bpm: 132,
     dry: ["into the machine", "hold the line", "no way back"],
@@ -101,16 +102,16 @@ const PACKS: Pack[] = [
   },
   {
     id: "warm-aria",
-    label: "Warm afro · Aria",
+    label: "Warm afro · female",
     tags: ["afro", "disco", "nu-disco", "sunshine", "tropical", "organic", "latin", "balearic"],
     voice: "aria",
     wetVoice: "natasha",
     rate: -16,
-    pitchHz: 4,
+    pitchHz: 3,
     dsp: "warm",
     bpm: 122,
-    dry: ["under the suuun", "mooove with the druum", "looove on the flooor"],
-    wet: ["daaance until daaawn", "fiiire in the niiight", "feeel alriiight"],
+    dry: ["under the sun", "move with the drum", "love on the floor"],
+    wet: ["dance until dawn", "fire in the night", "feel alright"],
   },
 ];
 
@@ -164,8 +165,8 @@ export function analyzeFromMeta(opts: {
   const phrSeed = digestInt(`${url}|${title}|phr|${pack.id}`);
   const dry = pick(pack.dry, phrSeed, 2);
   const wet = pick(pack.wet, phrSeed ^ 0x9e3779b9, 2);
-  const rate = pack.rate + ((phrSeed >> 3) % 7) - 3;
-  const pitchHz = pack.pitchHz + ((phrSeed >> 7) % 7) - 3;
+  const rate = pack.rate + ((phrSeed >> 3) % 5) - 2;
+  const pitchHz = pack.pitchHz + ((phrSeed >> 7) % 5) - 2;
   const bpm = opts.bpmHint ?? pack.bpm + (((phrSeed >> 11) % 5) - 2);
 
   return {
@@ -184,6 +185,6 @@ export function analyzeFromMeta(opts: {
     sourceAuthor: author,
     sourceUrl: url,
     sourceMode: "meta",
-    note: `Voce: ${pack.voice} + ${pack.wetVoice} · pack ${pack.id}. Mood dal link — frasi originali.`,
+    note: `Cantato melodico · pack ${pack.id}. Frasi originali, non copia del video.`,
   };
 }
