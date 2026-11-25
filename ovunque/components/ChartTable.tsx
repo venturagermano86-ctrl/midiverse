@@ -74,6 +74,12 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                       <span className="block truncate font-semibold text-mist hover:text-signal">
                         {track.title}
                       </span>
+                      {track.wishlistSaves != null && track.wishlistSaves > 0 ? (
+                        <span className="mt-0.5 block text-[0.65rem] font-bold uppercase tracking-wider text-signal">
+                          {track.wishlistSaves} wishlist
+                          {track.wishlistSaves === 1 ? "" : "s"}
+                        </span>
+                      ) : null}
                     </span>
                   </Link>
                 </td>

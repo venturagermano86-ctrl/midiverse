@@ -65,6 +65,8 @@ export type Track = {
   previewUrl?: string;
   source?: "curated" | "itunes" | "live";
   hasVinyl?: boolean;
+  /** Quante wishlist utenti (chart community). */
+  wishlistSaves?: number;
 };
 
 export type StoreMeta = {

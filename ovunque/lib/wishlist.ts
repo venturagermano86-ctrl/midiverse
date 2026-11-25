@@ -76,3 +76,47 @@ export async function wishlistIds(ownerSub: string): Promise<string[]> {
   );
   return rows.map((r) => r.track_id);
 }
+
+export type WishlistChartHit = {
+  track_id: string;
+  saves: number;
+  track: Track;
+};
+
+/**
+ * Chart community: più una traccia è in wishlist (utenti distinti), più sale.
+ */
+export async function topWishlisted(limit = 28): Promise<WishlistChartHit[]> {
+  const rows = await sql<{
+    track_id: string;
+    saves: string | number;
+    track_json: Track | string;
+  }>(
+    `select track_id,
+            count(distinct owner_sub)::int as saves,
+            (array_agg(track_json order by saved_at desc))[1] as track_json
+     from wishlist
+     group by track_id
+     order by saves desc, max(saved_at) desc
+     limit $1`,
+    [limit],
+  );
+
+  return rows.map((r) => {
+    const track =
+      typeof r.track_json === "string"
+        ? (JSON.parse(r.track_json) as Track)
+        : r.track_json;
+    const saves = Number(r.saves) || 0;
+    return {
+      track_id: r.track_id,
+      saves,
+      track: {
+        ...track,
+        id: track.id || r.track_id,
+        wishlistSaves: saves,
+        source: track.source ?? "live",
+      },
+    };
+  });
+}

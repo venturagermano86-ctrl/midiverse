@@ -78,10 +78,10 @@ export default function HomePage() {
               Charts
             </p>
             <h2 className="mt-1 font-display text-2xl font-black tracking-tight text-mist md:text-3xl">
-              Underground charts
+              Charts
             </h2>
             <p className="mt-1 text-sm text-soft">
-              House / minimal / techno — digi + 12&quot; misti stile deejay.de
+              Most wishlisted dalla community · house / minimal underground
             </p>
           </div>
           <Link

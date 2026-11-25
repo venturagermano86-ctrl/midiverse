@@ -5,14 +5,21 @@ import { ChartTable } from "@/components/ChartTable";
 import { UNDERGROUND_LANES, type LaneId } from "@/lib/live/underground";
 import type { Track } from "@/lib/types";
 
+type ChartLane = "wishlisted" | LaneId;
+
+const LANES: { id: ChartLane; label: string }[] = [
+  { id: "wishlisted", label: "Most wishlisted" },
+  ...UNDERGROUND_LANES.map((l) => ({ id: l.id as ChartLane, label: l.label })),
+];
+
 type Props = {
   fallback: Track[];
 };
 
 export function LiveChartPanel({ fallback }: Props) {
-  const [lane, setLane] = useState<LaneId>("all");
+  const [lane, setLane] = useState<ChartLane>("wishlisted");
   const [tracks, setTracks] = useState<Track[]>(fallback);
-  const [note, setNote] = useState("Carico chart underground…");
+  const [note, setNote] = useState("Carico chart…");
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +34,14 @@ export function LiveChartPanel({ fallback }: Props) {
         if (res.ok && Array.isArray(data.tracks) && data.tracks.length > 0) {
           setTracks(data.tracks);
           setLive(true);
-          setNote(data.note || "Chart underground · digi + vinyl misti");
+          setNote(data.note || "Chart live");
+        } else if (lane === "wishlisted") {
+          setTracks([]);
+          setLive(true);
+          setNote(
+            data.note ||
+              "Ancora vuota — più salvano in wishlist, più sale in chart",
+          );
         } else {
           setTracks(fallback);
           setLive(false);
@@ -35,9 +49,9 @@ export function LiveChartPanel({ fallback }: Props) {
         }
       } catch {
         if (!cancelled) {
-          setTracks(fallback);
+          setTracks(lane === "wishlisted" ? [] : fallback);
           setLive(false);
-          setNote("Offline — pick Dig List.");
+          setNote("Offline.");
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -51,7 +65,7 @@ export function LiveChartPanel({ fallback }: Props) {
   return (
     <div>
       <div className="mb-4 flex flex-wrap gap-1.5">
-        {UNDERGROUND_LANES.map((l) => (
+        {LANES.map((l) => (
           <button
             key={l.id}
             type="button"
@@ -73,12 +87,26 @@ export function LiveChartPanel({ fallback }: Props) {
             live ? "bg-signal text-ink" : "border border-line text-muted"
           }`}
         >
-          {loading ? "…" : live ? "Live · digi + 12\"" : "Curated"}
+          {loading
+            ? "…"
+            : lane === "wishlisted"
+              ? "Community"
+              : live
+                ? "Live · digi + 12\""
+                : "Curated"}
         </span>
         <p className="text-sm text-soft">{note}</p>
       </div>
 
-      <ChartTable tracks={tracks} />
+      {lane === "wishlisted" && tracks.length === 0 && !loading ? (
+        <p className="rounded-dig-lg border border-line bg-panel px-4 py-10 text-sm text-muted">
+          Nessun dig in chart ancora. Apri una traccia, premi{" "}
+          <strong className="text-mist">Salva in wishlist</strong> — più utenti la
+          salvano, più sale qui.
+        </p>
+      ) : (
+        <ChartTable tracks={tracks} />
+      )}
     </div>
   );
 }
