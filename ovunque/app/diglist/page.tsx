@@ -11,8 +11,9 @@ function DigListResults() {
   const params = useSearchParams();
   const modeParam = params.get("mode") === "long" ? "long" : "short";
   const bag = params.get("bag");
+  const seedsParam = params.get("seeds");
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [note, setNote] = useState("Building your dig list…");
+  const [note, setNote] = useState("Scouting Diglist…");
   const [seedCount, setSeedCount] = useState(0);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"short" | "long">(modeParam);
@@ -21,13 +22,15 @@ function DigListResults() {
     let cancelled = false;
     (async () => {
       try {
-        const packed = loadDigPicks(bag);
+        const packed = loadDigPicks(bag, seedsParam);
         const seeds = packed?.seeds ?? [];
         const mode = packed?.mode === "long" || modeParam === "long" ? "long" : "short";
         setMode(mode);
 
         if (seeds.length === 0) {
-          setError("Nessun pick — torna alla wishlist e seleziona fino a 6 dischi.");
+          setError(
+            "Nessun pick — torna alla wishlist, tocca fino a 6 dischi, poi Short/Long.",
+          );
           return;
         }
         setSeedCount(seeds.length);
@@ -45,7 +48,7 @@ function DigListResults() {
         setTracks(data.tracks ?? []);
         setNote(
           data.note ||
-            "Diglist: acquirenti dei pick × le loro collezioni (incrocio), non genere",
+            "Scout: Bandcamp buyers×collezioni + Discogs label/artista (non random)",
         );
       } catch {
         if (!cancelled) setError("Offline — riprova.");
@@ -54,7 +57,7 @@ function DigListResults() {
     return () => {
       cancelled = true;
     };
-  }, [modeParam, bag]);
+  }, [modeParam, bag, seedsParam]);
 
   return (
     <main className="px-4 py-10 md:px-8 md:py-12">
