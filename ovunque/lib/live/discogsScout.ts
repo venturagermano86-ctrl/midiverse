@@ -1,14 +1,29 @@
 /**
- * Scouting Diglist via Discogs (grafo reale digger):
- * traccia → release → etichette dove è uscita → roster label
- * → altre release stesso artista → stili condivisi → croce multi-seed.
- * Bandcamp supporters bloccati da CF lato server; Discogs è la rete accurata.
+ * Scout Diglist via Discogs — SOLO fili forti:
+ * artist discography + label roster (label reale da match Discogs).
+ * Niente dump stile, niente label fake ("X", "—").
  */
 
 import type { Track } from "../types";
 import { resolveGenre } from "../genres";
 
 const UA = "OvunqueDiglist/1.0 +https://ovunque.apps.grok.bot";
+
+const BAD_LABELS = new Set([
+  "x",
+  "-",
+  "—",
+  "unknown",
+  "not on label",
+  "self-released",
+  "self released",
+  "n/a",
+  "na",
+  "none",
+  "free drop",
+  "various",
+  "not on label (nol)",
+]);
 
 type DiscogsSearchHit = {
   id: number;
@@ -17,12 +32,9 @@ type DiscogsSearchHit = {
   style?: string[];
   genre?: string[];
   year?: string;
-  country?: string;
-  master_id?: number;
   type?: string;
   thumb?: string;
   cover_image?: string;
-  uri?: string;
 };
 
 type ScoutNode = {
@@ -33,7 +45,6 @@ type ScoutNode = {
   styles: string[];
   year?: number;
   artworkUrl?: string;
-  /** seed indices that linked here */
   seedLinks: Set<number>;
   via: Set<string>;
   score: number;
@@ -43,11 +54,13 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-async function discogsGet<T>(path: string, params: Record<string, string>): Promise<T | null> {
+async function discogsGet<T>(
+  path: string,
+  params: Record<string, string>,
+): Promise<T | null> {
   const q = new URLSearchParams(params);
-  const url = `https://api.discogs.com${path}?${q}`;
   try {
-    const res = await fetch(url, {
+    const res = await fetch(`https://api.discogs.com${path}?${q}`, {
       headers: { "User-Agent": UA, Accept: "application/json" },
       next: { revalidate: 0 },
     });
@@ -66,26 +79,63 @@ function parseTitleArtist(raw: string): { artist: string; title: string } {
   return { artist: "Unknown", title: raw.trim() };
 }
 
+function isRealLabel(label: string): boolean {
+  const l = label.trim().toLowerCase();
+  if (l.length < 3) return false;
+  if (BAD_LABELS.has(l)) return false;
+  if (/^[\d\W]+$/.test(l)) return false;
+  // scarta meme / spam corti
+  if (l.length <= 2) return false;
+  return true;
+}
+
+function looksLikeSpam(artist: string, title: string): boolean {
+  const s = `${artist} ${title}`;
+  // troppi caratteri non-latini → spesso junk Discogs
+  const latin = (s.match(/[A-Za-z0-9]/g) || []).length;
+  if (latin < 4) return true;
+  if (/пиздец|какашк|lyсина|drone x heart/i.test(s)) return true;
+  if (title.length < 2 || artist.length < 2) return true;
+  if (/^various/i.test(artist)) return true;
+  return false;
+}
+
 function styleOverlap(a: string[], b: string[]): number {
-  const nb = new Set(b.map((s) => s.toLowerCase()));
+  const nb = new Set(b.map((x) => x.toLowerCase()));
   let n = 0;
   for (const s of a) if (nb.has(s.toLowerCase())) n++;
   return n;
 }
 
-function stylesToGenre(styles: string[]): string {
-  if (!styles.length) return "Electronic";
-  // prefer first electronic dance style
+/** Stili compatibili house/techno family — soft. */
+function stylesCompatible(seedStyles: string[], hitStyles: string[]): boolean {
+  if (!seedStyles.length) return true;
+  if (!hitStyles.length) return true; // Discogs a volte senza style
+  if (styleOverlap(seedStyles, hitStyles) > 0) return true;
+  const seed = seedStyles.map((s) => s.toLowerCase()).join(" ");
+  const hit = hitStyles.map((s) => s.toLowerCase()).join(" ");
+  const housey = /house|tech house|deep house|afro|disco/;
+  const technoy = /techno|minimal|acid|industrial/;
+  if (housey.test(seed) && housey.test(hit)) return true;
+  if (technoy.test(seed) && technoy.test(hit)) return true;
+  if (housey.test(seed) && technoy.test(hit)) return false;
+  if (technoy.test(seed) && housey.test(hit) && !/tech house/.test(hit))
+    return false;
+  return false;
+}
+
+function stylesToGenre(styles: string[], fallback: string): string {
+  if (!styles.length) return fallback;
   for (const s of styles) {
     const g = resolveGenre(s);
-    if (g.slug !== "electronic" && g.name) return g.name;
+    if (g.slug !== "dance-electro-pop") return g.name;
   }
   return resolveGenre(styles[0]).name;
 }
 
-function toTrack(node: ScoutNode): Track {
-  const genre = stylesToGenre(node.styles);
-  const label = node.labels[0] ?? "—";
+function toTrack(node: ScoutNode, genreFallback: string): Track {
+  const genre = stylesToGenre(node.styles, genreFallback);
+  const label = node.labels.find(isRealLabel) ?? node.labels[0] ?? "—";
   const q = encodeURIComponent(`${node.artist} ${node.title}`);
   return {
     id: `discogs-${node.discogsId}`,
@@ -133,13 +183,11 @@ function bump(
   via: string,
   seedStyles: string[],
 ) {
-  if (!hit.id || hit.type === "artist" || hit.type === "label") return;
+  if (!hit.id) return;
   const { artist, title } = parseTitleArtist(hit.title ?? "");
-  if (!title || title.length < 2) return;
+  if (looksLikeSpam(artist, title)) return;
   const styles = hit.style ?? [];
-  const overlap = styleOverlap(styles, seedStyles);
-  // Hard: se Discogs ha styles e zero overlap con i pick → scarta
-  if (seedStyles.length && styles.length && overlap === 0) return;
+  if (!stylesCompatible(seedStyles, styles)) return;
 
   let row = map.get(hit.id);
   if (!row) {
@@ -147,7 +195,7 @@ function bump(
       discogsId: hit.id,
       title,
       artist,
-      labels: hit.label ?? [],
+      labels: (hit.label ?? []).filter(isRealLabel),
       styles,
       year: hit.year ? parseInt(hit.year, 10) : undefined,
       artworkUrl: hit.cover_image || hit.thumb,
@@ -159,14 +207,10 @@ function bump(
   }
   row.seedLinks.add(seedIdx);
   row.via.add(via);
-  row.score += pts + overlap * 20;
-  if (row.seedLinks.size >= 2) row.score += 90;
+  row.score += pts + styleOverlap(styles, seedStyles) * 15;
+  if (row.seedLinks.size >= 2) row.score += 100;
 }
 
-/**
- * Scouting accurato: per ogni seed cerca su Discogs,
- * espande label + artista, tiene solo stili affini, pesa le croci.
- */
 export async function scoutDiscogsGraph(
   seeds: Track[],
   limit = 24,
@@ -175,143 +219,129 @@ export async function scoutDiscogsGraph(
   if (!picked.length) return { tracks: [], note: "no seeds", nodes: 0 };
 
   const acc = new Map<number, ScoutNode>();
-  const seedMeta: { styles: string[]; labels: string[]; artists: string[] }[] =
-    [];
+  const seedMeta: {
+    styles: string[];
+    labels: string[];
+    artists: string[];
+    seedIds: string[];
+  }[] = [];
 
   for (let i = 0; i < picked.length; i++) {
     const seed = picked[i];
+    // query stretta: artista + titolo
     const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
       "/database/search",
       {
-        q: `${seed.artist} ${seed.title}`,
+        artist: seed.artist,
+        track: seed.title,
         type: "release",
-        per_page: "5",
+        per_page: "8",
       },
     );
-    await sleep(220);
+    await sleep(250);
 
-    const hits = data?.results ?? [];
+    let hits = data?.results ?? [];
+    if (hits.length === 0) {
+      const fallback = await discogsGet<{ results?: DiscogsSearchHit[] }>(
+        "/database/search",
+        {
+          q: `"${seed.artist}" "${seed.title}"`,
+          type: "release",
+          per_page: "5",
+        },
+      );
+      await sleep(250);
+      hits = fallback?.results ?? [];
+    }
+
     const styles = new Set<string>();
     const labels = new Set<string>();
     const artists = new Set<string>([seed.artist]);
-
-    // seed genre as style hint
     if (seed.genre) styles.add(seed.genre);
 
-    for (const h of hits.slice(0, 3)) {
+    for (const h of hits.slice(0, 4)) {
       (h.style ?? []).forEach((s) => styles.add(s));
-      (h.label ?? []).forEach((l) => labels.add(l));
+      (h.label ?? []).filter(isRealLabel).forEach((l) => labels.add(l));
       const parsed = parseTitleArtist(h.title ?? "");
-      if (parsed.artist) artists.add(parsed.artist);
-      // match diretto release ≈ seed (non in lista consigli)
-      bump(acc, h, i, 5, "seed-hit", Array.from(styles));
+      if (parsed.artist && !looksLikeSpam(parsed.artist, parsed.title)) {
+        artists.add(parsed.artist);
+      }
     }
 
-    // se Discogs non dà styles, usa genere seed
-    if (styles.size === 0 && seed.genre) styles.add(seed.genre);
-    if (seed.label && seed.label !== "—") labels.add(seed.label);
+    // label seed solo se reale (mai "X")
+    if (seed.label && isRealLabel(seed.label)) labels.add(seed.label);
 
     seedMeta.push({
       styles: Array.from(styles),
-      labels: Array.from(labels).slice(0, 4),
-      artists: Array.from(artists).slice(0, 3),
+      labels: Array.from(labels).slice(0, 3),
+      artists: Array.from(artists).slice(0, 2),
+      seedIds: [seed.id],
     });
   }
 
-  // Espandi ragnatela: label roster + artist discography
+  // Solo artista + label reali — NIENTE search per stile solo
   for (let i = 0; i < seedMeta.length; i++) {
     const meta = seedMeta[i];
-    const styleList = meta.styles;
 
-    for (const label of meta.labels.slice(0, 2)) {
+    for (const artist of meta.artists) {
+      const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
+        "/database/search",
+        {
+          artist,
+          type: "release",
+          per_page: "15",
+          genre: "Electronic",
+        },
+      );
+      await sleep(250);
+      for (const h of data?.results ?? []) {
+        bump(acc, h, i, 80, `artist:${artist}`, meta.styles);
+      }
+    }
+
+    for (const label of meta.labels) {
+      if (!isRealLabel(label)) continue;
       const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
         "/database/search",
         {
           label,
           type: "release",
-          per_page: "12",
+          per_page: "15",
           genre: "Electronic",
         },
       );
-      await sleep(220);
+      await sleep(250);
       for (const h of data?.results ?? []) {
-        bump(acc, h, i, 55, `label:${label}`, styleList);
-      }
-    }
-
-    for (const artist of meta.artists.slice(0, 2)) {
-      const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
-        "/database/search",
-        {
-          artist,
-          type: releaseType(),
-          per_page: "10",
-        },
-      );
-      await sleep(220);
-      for (const h of data?.results ?? []) {
-        bump(acc, h, i, 75, `artist:${artist}`, styleList);
-      }
-    }
-
-    // stile preciso (es. Tech House) — scouting stretto
-    for (const style of styleList.slice(0, 2)) {
-      const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
-        "/database/search",
-        {
-          style,
-          type: "release",
-          per_page: "8",
-          genre: "Electronic",
-        },
-      );
-      await sleep(220);
-      // peso basso: solo se anche label o artist match arriverà alto; qui filtro overlap
-      for (const h of data?.results ?? []) {
-        const labs = h.label ?? [];
-        const sharesLabel = labs.some((l) => meta.labels.includes(l));
-        if (!sharesLabel) continue; // niente dump genere: solo stesso stile E label seed
-        bump(acc, h, i, 40, `style+label:${style}`, styleList);
+        // label mates: devono avere overlap stile se Discogs lo dichiara
+        bump(acc, h, i, 60, `label:${label}`, meta.styles);
       }
     }
   }
 
-  // Escludi release che sono i seed stessi (titolo troppo simile)
-  const seedTitles = new Set(
+  const seedKeys = new Set(
     picked.map((s) => `${s.artist} ${s.title}`.toLowerCase()),
   );
+  const genreFallback = picked[0]?.genre || "Electronic";
 
   const ranked = Array.from(acc.values())
     .filter((n) => {
+      if (looksLikeSpam(n.artist, n.title)) return false;
       const key = `${n.artist} ${n.title}`.toLowerCase();
-      for (const s of Array.from(seedTitles)) {
-        if (key.includes(s.slice(0, Math.min(12, s.length))) && s.length > 8)
-          return false;
+      for (const s of Array.from(seedKeys)) {
+        if (s.length > 6 && key.includes(s.slice(0, 10))) return false;
       }
-      // almeno un filo forte
       const vias = Array.from(n.via);
       const strong = vias.some(
-        (v) =>
-          v.startsWith("label:") ||
-          v.startsWith("artist:") ||
-          v.startsWith("style+label:") ||
-          n.seedLinks.size >= 2,
+        (v) => v.startsWith("artist:") || v.startsWith("label:"),
       );
-      return strong && n.score >= 40;
+      return strong && n.score >= 55;
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
 
-  const tracks = ranked.map(toTrack);
-  const croci = ranked.filter((n) => n.seedLinks.size >= 2).length;
-
   return {
-    tracks,
+    tracks: ranked.map((n) => toTrack(n, genreFallback)),
     nodes: ranked.length,
-    note: `Discogs scout · ${ranked.length} dig (label/artist/style) · ${croci} a croce`,
+    note: `Discogs · ${ranked.length} dig (solo artist/label reali)`,
   };
-}
-
-function releaseType(): string {
-  return "release";
 }
