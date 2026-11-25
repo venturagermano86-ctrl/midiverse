@@ -2,21 +2,16 @@ import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import { spawn } from "child_process";
-import ffmpegPath from "ffmpeg-static";
 
 /**
- * Vocal stems for the remake pipeline:
- * - dry.mp3  (call, fixed)
- * - wet.mp3  (response, lightly pitched / delayed feel)
- * - mix.mp3  (dry+wet interleaved, duration-locked)
- *
- * Pitch-follows note contour (semitone offsets) via ffmpeg asetrate.
+ * Vocal stems — dry / wet / mix.
+ * Uses ffmpeg when available; otherwise pure MP3 concat (no subprocess).
  */
 
 function run(
   bin: string,
   args: string[],
-  timeoutMs = 25000
+  timeoutMs = 20000
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: ["ignore", "ignore", "pipe"] });
@@ -40,51 +35,80 @@ function run(
   });
 }
 
-function ff(): string {
-  return (ffmpegPath as string | null) || "ffmpeg";
+let cachedBin: string | null | undefined;
+
+async function resolveFfmpeg(): Promise<string | null> {
+  if (cachedBin !== undefined) return cachedBin;
+  const candidates: string[] = [];
+  try {
+    const mod = await import("ffmpeg-static");
+    const p = (mod as { default?: string }).default || (mod as unknown as string);
+    if (typeof p === "string" && p) candidates.push(p);
+  } catch {
+    /* optional */
+  }
+  candidates.push("ffmpeg", "/usr/bin/ffmpeg");
+  for (const bin of candidates) {
+    try {
+      await run(bin, ["-version"], 5000);
+      cachedBin = bin;
+      return bin;
+    } catch {
+      /* try next */
+    }
+  }
+  cachedBin = null;
+  return null;
 }
 
-/** Stretch/pad/trim to exact duration (seconds). */
-export async function lockDuration(
+async function lockDuration(
   src: string,
   dest: string,
   lengthSec: number
-): Promise<void> {
-  const bin = ff();
-  // atempo only accepts 0.5–2.0; chain if needed after measuring is heavy —
-  // use apad + atrim for hard lock (club stem length).
-  await run(bin, [
-    "-y",
-    "-i",
-    src,
-    "-af",
-    `apad=pad_dur=${lengthSec},atrim=0:${lengthSec}`,
-    "-t",
-    String(lengthSec),
-    "-c:a",
-    "libmp3lame",
-    "-b:a",
-    "128k",
-    "-ar",
-    "24000",
-    "-ac",
-    "1",
-    dest,
-  ]);
+): Promise<boolean> {
+  const bin = await resolveFfmpeg();
+  if (!bin) return false;
+  try {
+    await run(bin, [
+      "-y",
+      "-i",
+      src,
+      "-af",
+      `apad=pad_dur=${lengthSec},atrim=0:${lengthSec}`,
+      "-t",
+      String(lengthSec),
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "128k",
+      "-ar",
+      "24000",
+      "-ac",
+      "1",
+      dest,
+    ]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
-/** Pitch shift by N semitones (asetrate), keep duration with atempo. */
-export async function pitchShiftSemitones(
+async function pitchShiftSemitones(
   src: string,
   dest: string,
   semitones: number
-): Promise<void> {
-  const bin = ff();
+): Promise<boolean> {
+  const bin = await resolveFfmpeg();
+  if (!bin || Math.abs(semitones) < 0.01) {
+    await fs.copyFile(src, dest);
+    return !bin;
+  }
   const ratio = Math.pow(2, semitones / 12);
-  // asetrate changes pitch+speed; atempo restores duration
   let tempo = 1 / ratio;
-  const filters: string[] = [`asetrate=24000*${ratio.toFixed(6)}`, "aresample=24000"];
-  // atempo must be 0.5–2.0
+  const filters: string[] = [
+    `asetrate=24000*${ratio.toFixed(6)}`,
+    "aresample=24000",
+  ];
   while (tempo > 2.0) {
     filters.push("atempo=2.0");
     tempo /= 2;
@@ -94,94 +118,105 @@ export async function pitchShiftSemitones(
     tempo /= 0.5;
   }
   filters.push(`atempo=${tempo.toFixed(6)}`);
-  await run(bin, [
-    "-y",
-    "-i",
-    src,
-    "-af",
-    filters.join(","),
-    "-c:a",
-    "libmp3lame",
-    "-b:a",
-    "128k",
-    "-ar",
-    "24000",
-    "-ac",
-    "1",
-    dest,
-  ]);
-}
-
-/** Light wet character: slight pitch + delay echo (Delay Designer–ish, free). */
-export async function wetCharacter(src: string, dest: string): Promise<void> {
-  const bin = ff();
-  await run(bin, [
-    "-y",
-    "-i",
-    src,
-    "-af",
-    "asetrate=24000*1.02,aresample=24000,atempo=0.9804,aecho=0.8:0.88:180:0.22",
-    "-c:a",
-    "libmp3lame",
-    "-b:a",
-    "128k",
-    "-ar",
-    "24000",
-    "-ac",
-    "1",
-    dest,
-  ]);
-}
-
-export async function concatAudio(files: string[], dest: string): Promise<void> {
-  const bin = ff();
-  const dir = await fs.mkdtemp(path.join(os.tmpdir(), "vs-concat-"));
   try {
-    const list = path.join(dir, "list.txt");
-    const body = files.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join("\n");
-    await fs.writeFile(list, body);
     await run(bin, [
       "-y",
-      "-f",
-      "concat",
-      "-safe",
-      "0",
       "-i",
-      list,
+      src,
+      "-af",
+      filters.join(","),
       "-c:a",
       "libmp3lame",
       "-b:a",
       "128k",
+      "-ar",
+      "24000",
+      "-ac",
+      "1",
       dest,
     ]);
-  } finally {
-    fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    return true;
+  } catch {
+    await fs.copyFile(src, dest);
+    return false;
   }
 }
 
-/**
- * Apply note contour across sequential phrase files:
- * each file gets pitched to notes[i] relative to notes[0] (root).
- */
-export async function applyNoteContour(
+async function wetCharacter(src: string, dest: string): Promise<void> {
+  const bin = await resolveFfmpeg();
+  if (!bin) {
+    await fs.copyFile(src, dest);
+    return;
+  }
+  try {
+    await run(bin, [
+      "-y",
+      "-i",
+      src,
+      "-af",
+      "asetrate=24000*1.02,aresample=24000,atempo=0.9804,aecho=0.8:0.88:180:0.22",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "128k",
+      "-ar",
+      "24000",
+      "-ac",
+      "1",
+      dest,
+    ]);
+  } catch {
+    await fs.copyFile(src, dest);
+  }
+}
+
+async function concatAudio(files: string[], dest: string): Promise<void> {
+  const bin = await resolveFfmpeg();
+  if (bin) {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "vs-concat-"));
+    try {
+      const list = path.join(dir, "list.txt");
+      const body = files
+        .map((f) => `file '${f.replace(/'/g, "'\\''")}'`)
+        .join("\n");
+      await fs.writeFile(list, body);
+      await run(bin, [
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        list,
+        "-c:a",
+        "libmp3lame",
+        "-b:a",
+        "128k",
+        dest,
+      ]);
+      return;
+    } catch {
+      /* fall through to buffer concat */
+    } finally {
+      fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    }
+  }
+  const parts = await Promise.all(files.map((f) => fs.readFile(f)));
+  await fs.writeFile(dest, Buffer.concat(parts));
+}
+
+async function applyNoteContour(
   phraseFiles: string[],
   notes: number[],
   outDir: string
 ): Promise<string[]> {
+  await fs.mkdir(outDir, { recursive: true });
   const root = notes[0] ?? 0;
   const pitched: string[] = [];
   for (let i = 0; i < phraseFiles.length; i++) {
     const semi = (notes[i % notes.length] ?? root) - root;
     const dest = path.join(outDir, `pitched${i}.mp3`);
-    if (Math.abs(semi) < 0.01) {
-      await fs.copyFile(phraseFiles[i], dest);
-    } else {
-      try {
-        await pitchShiftSemitones(phraseFiles[i], dest, semi);
-      } catch {
-        await fs.copyFile(phraseFiles[i], dest);
-      }
-    }
+    await pitchShiftSemitones(phraseFiles[i], dest, semi);
     pitched.push(dest);
   }
   return pitched;
@@ -192,9 +227,10 @@ export type StemBundle = {
   wetPath: string;
   mixPath: string;
   lengthSec: number;
+  usedFfmpeg: boolean;
 };
 
-/** Build dry / wet / mix stems locked to lengthSec. */
+/** Build dry / wet / mix stems; never throws if phrases render. */
 export async function buildStemBundle(opts: {
   dryPhrases: string[];
   wetPhrases: string[];
@@ -206,11 +242,10 @@ export async function buildStemBundle(opts: {
   notes: number[];
 }): Promise<StemBundle> {
   const rawDir = path.join(opts.workDir, "raw");
-  const pitDir = path.join(opts.workDir, "pit");
   await fs.mkdir(rawDir, { recursive: true });
-  await fs.mkdir(pitDir, { recursive: true });
 
-  const rounds = Math.max(2, Math.min(5, Math.floor(opts.lengthSec / 8)));
+  // Keep rounds low so published hosts stay under timeout
+  const rounds = Math.max(2, Math.min(4, Math.floor(opts.lengthSec / 10)));
   const dryRaws: string[] = [];
   const wetRaws: string[] = [];
 
@@ -225,20 +260,23 @@ export async function buildStemBundle(opts: {
     wetRaws.push(wPath);
   }
 
-  const dryPitched = await applyNoteContour(dryRaws, opts.notes, pitDir);
-  const wetPitDir = path.join(opts.workDir, "wetpit");
-  await fs.mkdir(wetPitDir, { recursive: true });
-  const wetNotes = opts.notes.map((n, i) => n + (i % 2 === 0 ? 0 : 3)); // response a third up-ish
-  const wetPitchedBase = await applyNoteContour(wetRaws, wetNotes, wetPitDir);
+  const ff = await resolveFfmpeg();
+  const dryPitched = await applyNoteContour(
+    dryRaws,
+    opts.notes,
+    path.join(opts.workDir, "pit")
+  );
+  const wetNotes = opts.notes.map((n, i) => n + (i % 2 === 0 ? 0 : 3));
+  const wetPitchedBase = await applyNoteContour(
+    wetRaws,
+    wetNotes,
+    path.join(opts.workDir, "wetpit")
+  );
 
   const wetChar: string[] = [];
   for (let i = 0; i < wetPitchedBase.length; i++) {
     const dest = path.join(opts.workDir, `wetchar${i}.mp3`);
-    try {
-      await wetCharacter(wetPitchedBase[i], dest);
-    } catch {
-      await fs.copyFile(wetPitchedBase[i], dest);
-    }
+    await wetCharacter(wetPitchedBase[i], dest);
     wetChar.push(dest);
   }
 
@@ -249,7 +287,6 @@ export async function buildStemBundle(opts: {
   await concatAudio(dryPitched, dryJoined);
   await concatAudio(wetChar, wetJoined);
 
-  // Interleave dry/wet for mix
   const interleaved: string[] = [];
   for (let i = 0; i < Math.max(dryPitched.length, wetChar.length); i++) {
     if (dryPitched[i]) interleaved.push(dryPitched[i]);
@@ -261,9 +298,22 @@ export async function buildStemBundle(opts: {
   const wetPath = path.join(opts.workDir, "stem-wet.mp3");
   const mixPath = path.join(opts.workDir, "stem-mix.mp3");
 
-  await lockDuration(dryJoined, dryPath, opts.lengthSec);
-  await lockDuration(wetJoined, wetPath, opts.lengthSec);
-  await lockDuration(mixJoined, mixPath, opts.lengthSec);
+  const locked =
+    (await lockDuration(dryJoined, dryPath, opts.lengthSec)) &&
+    (await lockDuration(wetJoined, wetPath, opts.lengthSec)) &&
+    (await lockDuration(mixJoined, mixPath, opts.lengthSec));
 
-  return { dryPath, wetPath, mixPath, lengthSec: opts.lengthSec };
+  if (!locked) {
+    await fs.copyFile(dryJoined, dryPath);
+    await fs.copyFile(wetJoined, wetPath);
+    await fs.copyFile(mixJoined, mixPath);
+  }
+
+  return {
+    dryPath,
+    wetPath,
+    mixPath,
+    lengthSec: opts.lengthSec,
+    usedFfmpeg: Boolean(ff) && locked,
+  };
 }

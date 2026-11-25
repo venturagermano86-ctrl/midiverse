@@ -7,9 +7,9 @@ import { SINGERS } from "@/lib/singers";
 
 const LENGTHS = [
   { sec: 16, label: "16s" },
+  { sec: 24, label: "24s" },
   { sec: 32, label: "32s" },
   { sec: 48, label: "48s" },
-  { sec: 64, label: "64s" },
 ];
 
 type Analysis = {
@@ -92,16 +92,13 @@ export default function VocalStudioPage() {
     revokeAll();
     try {
       const url = sourceUrl.trim();
-      if (
-        (mode === "reference" || mode === "remake") &&
-        !track &&
-        !url
-      ) {
+      if (mode === "reference" && !track && !url) {
         throw new Error("Incolla un link YouTube, oppure carica la traccia.");
       }
       if (mode === "overlay" && !track && !url) {
         throw new Error("Carica la tua traccia (o un link).");
       }
+      // remake: link optional — works from BPM/key/cantante alone
       const body = new FormData();
       body.set("genreId", genre.id);
       body.set("variationId", variation.id);
@@ -176,7 +173,7 @@ export default function VocalStudioPage() {
                 {
                   id: "remake" as const,
                   title: "Remake (stems)",
-                  blurb: "Parole nuove · stesse note/durata · voce vicina",
+                  blurb: "Parole nuove · note/durata · voce vicina (link opzionale)",
                 },
                 {
                   id: "reference" as const,
