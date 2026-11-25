@@ -11,6 +11,7 @@ import {
   formatOfferPrice,
   getTrack,
 } from "@/lib/catalog";
+import { claimPreview, releasePreview } from "@/lib/previewAudio";
 import { storeName } from "@/lib/stores";
 import type { Track } from "@/lib/types";
 
@@ -29,6 +30,7 @@ export default function StationPage() {
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const stopRef = useRef<(() => void) | null>(null);
 
   const current = items[cursor]?.track ?? null;
 
@@ -67,6 +69,7 @@ export default function StationPage() {
     })();
     return () => {
       cancelled = true;
+      stopRef.current?.();
       audioRef.current?.pause();
     };
   }, [id]);
@@ -92,11 +95,18 @@ export default function StationPage() {
       }
       const a = audioRef.current;
       a.src = src;
+      const stop = () => {
+        a.pause();
+        setPlaying(false);
+      };
+      stopRef.current = stop;
+      claimPreview(stop);
       try {
         await a.play();
         setPlaying(true);
       } catch {
         setPlaying(false);
+        releasePreview(stop);
       }
     },
     [items],
@@ -125,9 +135,22 @@ export default function StationPage() {
     if (playing) {
       a.pause();
       setPlaying(false);
-    } else {
-      void a.play().then(() => setPlaying(true)).catch(() => setPlaying(false));
+      if (stopRef.current) releasePreview(stopRef.current);
+      return;
     }
+    const stop = () => {
+      a.pause();
+      setPlaying(false);
+    };
+    stopRef.current = stop;
+    claimPreview(stop);
+    void a
+      .play()
+      .then(() => setPlaying(true))
+      .catch(() => {
+        setPlaying(false);
+        releasePreview(stop);
+      });
   }
 
   const shelfTracks = items.map((i) => i.track);
