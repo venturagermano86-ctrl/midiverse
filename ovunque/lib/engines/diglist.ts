@@ -1,6 +1,7 @@
 import type { Track } from "../types";
 import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
+import { walkDigWeb, inSeedTerritory, type WebHit } from "./digWeb";
 import {
   crossBuyersCollections,
   resolveTracksById,
@@ -15,53 +16,96 @@ const LIMITS: Record<DigMode, number> = {
   long: 36,
 };
 
+function dedupeTracks(list: Track[]): Track[] {
+  const seen = new Set<string>();
+  const out: Track[] = [];
+  list.forEach((t) => {
+    const key = `${t.artist.toLowerCase()}|${t.title.toLowerCase()}`;
+    if (seen.has(key) || seen.has(t.id)) return;
+    seen.add(key);
+    seen.add(t.id);
+    out.push(t);
+  });
+  return out;
+}
+
 /**
- * Short / Long stile diglist.midivrs.com:
- * acquirenti dei pick × le loro collezioni → incrocio (croce).
- * NON ranking per genere.
+ * Short / Long Diglist accurato:
+ * 1) Bandcamp buyers×collezioni (se raggiungibile)
+ * 2) Discogs ragnatela label/artista/stile (dove è uscito)
+ * 3) Wishlist croci community
+ * 4) Catalogo ragnatela artista/label/BPM — mai random
  */
 export function buildDigList(
   seeds: Track[],
   extras: Track[],
   mode: DigMode,
   realBuyers: BuyerCollection[] = [],
+  scoutTracks: Track[] = [],
 ): {
   mode: DigMode;
   tracks: Track[];
   note: string;
   croci: CroceHit[];
   method: string;
+  web: WebHit[];
 } {
   const picked = seeds.slice(0, 6);
   const limit = LIMITS[mode];
+  const seedIds = new Set(picked.map((s) => s.id));
 
+  // Scout live (Discogs/BC) — solo territorio dei seed
+  const scoutOk = scoutTracks.filter(
+    (t) => !seedIds.has(t.id) && inSeedTerritory(picked, t),
+  );
+
+  // Wishlist buyers × collections
   const croci = crossBuyersCollections(picked, realBuyers);
-  const rankedIds = croci.slice(0, limit).map((c) => c.trackId);
-  let tracks = resolveTracksById(rankedIds, extras);
+  const wishTracks = resolveTracksById(
+    croci.slice(0, limit).map((c) => c.trackId),
+    extras,
+  ).filter((t) => inSeedTerritory(picked, t));
 
-  // Se pochi risultati catalogo, completa SOLO con extras che hanno stesso artista di un seed
-  // (mai dump genere iTunes)
-  if (tracks.length < limit) {
-    const seedArtists = new Set(picked.map((s) => s.artist.toLowerCase()));
-    const have = new Set(tracks.map((t) => t.id));
-    for (const t of extras) {
-      if (have.has(t.id)) continue;
-      if (!seedArtists.has(t.artist.toLowerCase())) continue;
-      tracks.push(t);
-      have.add(t.id);
-      if (tracks.length >= limit) break;
-    }
+  // Ragnatela catalogo: artista → label → roster → BPM
+  const web = walkDigWeb(picked, [...extras, ...scoutOk], limit);
+
+  // Merge ranking: scout (live digger) > croce wishlist > web
+  const scored = new Map<string, { track: Track; score: number; why: string }>();
+
+  function add(t: Track, score: number, why: string) {
+    if (seedIds.has(t.id)) return;
+    if (!inSeedTerritory(picked, t)) return;
+    const key = `${t.artist.toLowerCase()}|${t.title.toLowerCase()}`;
+    const prev = scored.get(key);
+    if (!prev || score > prev.score) scored.set(key, { track: t, score, why });
   }
 
-  // Ultimo riempimento: stessa label dei pick (segnale digger, non genere)
+  scoutOk.forEach((t, i) => add(t, 200 - i, "scout"));
+  croci.forEach((c) => {
+    const t = wishTracks.find((x) => x.id === c.trackId);
+    if (t) add(t, 150 + c.score / 10, "wishlist-croce");
+  });
+  web.forEach((h) => add(h.track, h.score, h.paths[0] ?? "web"));
+
+  let tracks = Array.from(scored.values())
+    .sort((a, b) => b.score - a.score)
+    .map((x) => x.track);
+
+  tracks = dedupeTracks(tracks).slice(0, limit);
+
+  // Riempimento stretto: SOLO stesso artista o stessa label dei pick
   if (tracks.length < Math.min(6, limit)) {
+    const artists = new Set(picked.map((s) => s.artist.toLowerCase()));
     const labels = new Set(
       picked.map((s) => s.label).filter((l) => l && l !== "—"),
     );
     const have = new Set(tracks.map((t) => t.id));
-    for (const t of TRACKS) {
-      if (have.has(t.id) || picked.some((s) => s.id === t.id)) continue;
-      if (!labels.has(t.label)) continue;
+    for (const t of [...scoutOk, ...TRACKS, ...extras]) {
+      if (have.has(t.id) || seedIds.has(t.id)) continue;
+      if (!inSeedTerritory(picked, t)) continue;
+      const sameArtist = artists.has(t.artist.toLowerCase());
+      const sameLabel = labels.has(t.label);
+      if (!sameArtist && !sameLabel) continue;
       tracks.push(t);
       have.add(t.id);
       if (tracks.length >= limit) break;
@@ -69,22 +113,23 @@ export function buildDigList(
   }
 
   tracks = tracks.slice(0, limit);
-  const croceForte = croci.filter((c) => c.multiSeedBuyers > 0 || c.seedLinks >= 2).length;
+  const croceForte = croci.filter((c) => c.multiSeedBuyers > 0 || c.seedLinks >= 2)
+    .length;
 
   return {
     mode,
     tracks,
     croci: croci.slice(0, limit),
-    method: "diglist-buyers-x-collections",
+    web: web.slice(0, 12),
+    method: "diglist-web-scout-croce",
     note:
       mode === "short"
-        ? `Short list · ${tracks.length} dig da incrocio acquirenti×collezioni (${croceForte} a croce)`
-        : `Long list · ${tracks.length} dig da collezioni di chi ha i pick (${croceForte} croci forti)`,
+        ? `Short · ${tracks.length} dig (scout+ragnatela+croci${croceForte ? ` · ${croceForte} croci` : ""})`
+        : `Long · ${tracks.length} dig accurati (label/artist/stile, non random)`,
   };
 }
 
 export function digSearchQuery(seeds: Track[]): string {
-  // Per live: titoli specifici dei pick, non genere
   const parts = seeds
     .slice(0, 3)
     .map((s) => `${s.artist} ${s.title}`)

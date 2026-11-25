@@ -44,6 +44,17 @@ export function safeHttpsUrl(value: unknown, maxLen = 2048): string | undefined 
   return u.toString();
 }
 
+/** Path interni free media (`/api/free/media/...`) oppure https. */
+export function safeMediaRef(value: unknown, maxLen = 2048): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim().slice(0, maxLen);
+  if (!trimmed) return undefined;
+  if (/^\/api\/free\/media\/[A-Za-z0-9._~\-/%]+\/(audio|cover)$/.test(trimmed)) {
+    return trimmed;
+  }
+  return safeHttpsUrl(trimmed, maxLen);
+}
+
 function clipStr(value: unknown, max = MAX_STRING): string {
   if (typeof value !== "string") return "";
   return value.trim().slice(0, max);
@@ -54,7 +65,7 @@ function sanitizeOffer(raw: unknown): Offer | null {
   const o = raw as Record<string, unknown>;
   const storeId = typeof o.storeId === "string" ? o.storeId : "";
   if (!STORE_IDS.has(storeId)) return null;
-  const url = safeHttpsUrl(o.url);
+  const url = safeMediaRef(o.url) || safeHttpsUrl(o.url);
   if (!url) return null;
   const kind = o.kind === "free" || o.kind === "paid" ? o.kind : "paid";
   const currency = o.currency === "USD" ? "USD" : "EUR";
@@ -154,8 +165,8 @@ export function sanitizeTrack(raw: unknown): Track | null {
     rails,
     isrc: clipStr(t.isrc, 32) || undefined,
     offers,
-    artworkUrl: safeHttpsUrl(t.artworkUrl),
-    previewUrl: safeHttpsUrl(t.previewUrl),
+    artworkUrl: safeMediaRef(t.artworkUrl) || safeHttpsUrl(t.artworkUrl),
+    previewUrl: safeMediaRef(t.previewUrl) || safeHttpsUrl(t.previewUrl),
     source,
     hasVinyl: t.hasVinyl === true,
     wishlistSaves:

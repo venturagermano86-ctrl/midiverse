@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { TRACKS } from "../catalog";
 import type { Track } from "../types";
+import { inSeedTerritory } from "./digWeb";
 
 /**
  * Motore Diglist reale:
@@ -34,27 +35,31 @@ function syntheticBuyersForSeed(seed: Track, fanCount = 14): Map<string, Set<str
   const out = new Map<string, Set<string>>();
   const pool = TRACKS.filter((t) => t.id !== seed.id);
 
-  // Vicini "da digger": stessa label, stesso artista, o stesso genere+bpm vicino
+  // Vicini digger: artista / label / genere+BPM — MAI pool random
   const neighbors = pool
+    .filter((t) => inSeedTerritory([seed], t))
     .map((t) => {
       let s = 0;
       if (t.artist === seed.artist) s += 50;
       if (t.label && t.label === seed.label && t.label !== "—") s += 35;
-      if (t.genre === seed.genre) s += 8;
-      if (seed.bpm && t.bpm && Math.abs(seed.bpm - t.bpm) <= 5) s += 20;
+      if (t.genre === seed.genre) s += 22;
+      if (seed.bpm && t.bpm && Math.abs(seed.bpm - t.bpm) <= 4) s += 24;
       const sharedRails = t.rails.filter((r) => seed.rails.includes(r) && r !== "novita");
-      s += sharedRails.length * 6;
-      // hash mix so not only same genre
-      const h = createHash("sha1").update(`${seed.id}:${t.id}`).digest("hex");
-      s += parseInt(h.slice(0, 2), 16) % 7;
+      s += sharedRails.length * 4;
       return { t, s };
     })
-    .filter((x) => x.s >= 20)
+    .filter((x) => x.s >= 35)
     .sort((a, b) => b.s - a.s)
-    .slice(0, 24)
+    .slice(0, 20)
     .map((x) => x.t);
 
-  const base = neighbors.length ? neighbors : pool.slice(0, 12);
+  // Se pochi vicini: solo stessa famiglia già filtrata con score≥22
+  const base =
+    neighbors.length >= 3
+      ? neighbors
+      : pool
+          .filter((t) => inSeedTerritory([seed], t) && t.genre === seed.genre)
+          .slice(0, 12);
 
   for (let i = 0; i < fanCount; i++) {
     const buyerId = `bc-fan-${hashFan(seed.id, i)}`;
