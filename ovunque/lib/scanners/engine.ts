@@ -35,7 +35,9 @@ export function scanTrack(track: Track): ScanReport {
         note:
           offer.kind === "free"
             ? "Download gratuito disponibile"
-            : `Listino ${offer.priceEur.toFixed(2)} €`,
+            : offer.priceEur == null
+              ? "Deep-link store (prezzo sullo shop)"
+              : `Listino ${offer.priceEur.toFixed(2)} €`,
       };
     } catch {
       return {

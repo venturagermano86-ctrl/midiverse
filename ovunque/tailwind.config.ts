@@ -5,37 +5,39 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#0b0f14",
-        mist: "#e8eef5",
-        signal: "#2ec4b6",
-        ember: "#ff7a45",
-        slate: {
-          soft: "#1a222d",
-          line: "#2a3544",
-        },
+        ink: "#0c0d0f",
+        panel: "#14171c",
+        row: "#1a1e24",
+        mist: "#e8eaed",
+        muted: "#7d828a",
+        soft: "#a3a8b0",
+        signal: "#5fd4a8",
+        "signal-hi": "#6ee7b7",
+        bandcamp: "#1da0c3",
+        ember: "#f0a483",
+        line: "#252a32",
+      },
+      borderRadius: {
+        dig: "10px",
+        "dig-lg": "16px",
       },
       fontFamily: {
-        display: ["Syne", "system-ui", "sans-serif"],
-        body: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
+        display: ["Archivo", "system-ui", "sans-serif"],
+        body: ["Archivo", "system-ui", "sans-serif"],
       },
       keyframes: {
         rise: {
-          "0%": { opacity: "0", transform: "translateY(18px)" },
+          "0%": { opacity: "0", transform: "translateY(14px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         drift: {
           "0%, 100%": { transform: "translate3d(0,0,0) scale(1)" },
-          "50%": { transform: "translate3d(2%, -1%, 0) scale(1.04)" },
-        },
-        pulseSoft: {
-          "0%, 100%": { opacity: "0.55" },
-          "50%": { opacity: "0.9" },
+          "50%": { transform: "translate3d(1.5%, -1%, 0) scale(1.03)" },
         },
       },
       animation: {
-        rise: "rise 0.7s ease-out both",
-        drift: "drift 18s ease-in-out infinite",
-        "pulse-soft": "pulseSoft 3.5s ease-in-out infinite",
+        rise: "rise 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) both",
+        drift: "drift 20s ease-in-out infinite",
       },
     },
   },

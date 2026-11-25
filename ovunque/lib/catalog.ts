@@ -4,13 +4,20 @@ import { cheapestOffer as pickCheapest, rankOffers } from "./engines/price";
 export {
   cheapestOffer,
   formatPrice,
+  formatOfferPrice,
+  formatVinylBreakdown,
+  landedPrice,
   hasFreeOffer,
   freeOffers,
   paidOffers,
+  digitalOffers,
+  vinylOffers,
   rankOffers,
   ctaLabel,
   offerButtonLabel,
 } from "./engines/price";
+
+import { sampleVinylListings } from "./live/storeLinks";
 
 function urlFor(storeId: StoreId, slug: string): string {
   const paths: Record<StoreId, string> = {
@@ -18,11 +25,17 @@ function urlFor(storeId: StoreId, slug: string): string {
     bandcamp: `https://bandcamp.com/track/${slug}`,
     traxsource: `https://www.traxsource.com/track/${slug}`,
     juno: `https://www.junodownload.com/${slug}`,
+    juno_vinyl: `https://www.juno.co.uk/search/?q%5Ball%5D%5B0%5D=${slug}`,
     whatpeopleplay: `https://www.whatpeopleplay.com/track/${slug}`,
     boomkat: `https://boomkat.com/products/${slug}`,
     bleep: `https://bleep.com/track/${slug}`,
     clone: `https://clone.nl/item/${slug}`,
     hardwax: `https://hardwax.com/${slug}`,
+    decks: `https://www.decks.de/decks/shop_search.htm?search=${slug}`,
+    deejay: `https://www.deejay.de/search?q=${slug}`,
+    roughtrade: `https://www.roughtrade.com/search?q=${slug}`,
+    discogs: `https://www.discogs.com/search/?q=${slug}&type=release`,
+    hhv: `https://www.hhv.de/shop/en/search?sSearch=${slug}`,
     apple: `https://music.apple.com/track/${slug}`,
     amazon: `https://www.amazon.com/dp/${slug}`,
     soundcloud: `https://soundcloud.com/${slug}/download`,
@@ -46,6 +59,7 @@ function paid(
     format,
     url: urlFor(storeId, slug),
     access: "download",
+    media: "digital",
   };
 }
 
@@ -58,7 +72,25 @@ function freeDl(storeId: StoreId, format: string, slug: string): Offer {
     format,
     url: urlFor(storeId, slug),
     access: "download",
+    media: "digital",
   };
+}
+
+function withVinyl(artist: string, title: string, seed: number, digital: Offer[]): Offer[] {
+  const vinyl = sampleVinylListings(artist, title, seed).map((v) => ({
+    storeId: v.storeId,
+    kind: "paid" as const,
+    priceEur: v.priceEur,
+    shippingEur: v.shippingEur,
+    priceFrom: v.priceFrom,
+    choicesCount: v.choicesCount,
+    currency: "EUR" as const,
+    format: v.format ?? '12" Vinyl',
+    url: v.url,
+    access: "search" as const,
+    media: "vinyl" as const,
+  }));
+  return [...digital, ...vinyl];
 }
 
 /**
@@ -78,16 +110,16 @@ export const TRACKS: Track[] = [
     mood: "club warm",
     coverHue: 28,
     suggested: true,
-    rails: ["per-te", "house", "sotto-2", "gratis"],
+    rails: ["per-te", "house", "sotto-2"],
     isrc: "IT-GV0-25-00001",
-    offers: [
-      freeDl("soundcloud", "MP3 320 · free DL", "germanoventura/hold-the-mark"),
+    hasVinyl: true,
+    offers: withVinyl("Germano Ventura", "Hold The Mark", 1, [
       paid("beatport", 1.79, "WAV", "hold-the-mark"),
       paid("traxsource", 1.59, "WAV", "hold-the-mark"),
       paid("juno", 1.49, "MP3 / WAV", "hold-the-mark"),
       paid("bandcamp", 1.29, "FLAC / MP3", "hold-the-mark"),
       paid("clone", 1.69, "WAV", "hold-the-mark"),
-    ],
+    ]),
   },
   {
     id: "spin-the-gate",
@@ -101,16 +133,16 @@ export const TRACKS: Track[] = [
     mood: "rolling",
     coverHue: 195,
     suggested: true,
-    rails: ["per-te", "house", "gratis"],
+    rails: ["per-te", "house"],
     isrc: "IT-GV0-25-00002",
-    offers: [
-      freeDl("soundcloud", "MP3 · free DL", "germanoventura/spin-the-gate"),
+    hasVinyl: true,
+    offers: withVinyl("Germano Ventura", "Spin The Gate", 2, [
       paid("beatport", 1.99, "WAV", "spin-the-gate"),
       paid("traxsource", 1.79, "WAV", "spin-the-gate"),
       paid("whatpeopleplay", 1.69, "WAV", "spin-the-gate"),
       paid("bandcamp", 2.0, "FLAC", "spin-the-gate"),
       paid("juno", 1.89, "WAV", "spin-the-gate"),
-    ],
+    ]),
   },
   {
     id: "midnight-relay",
@@ -126,7 +158,6 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["per-te", "deep", "novita", "gratis"],
     offers: [
-      freeDl("soundcloud", "WAV · free DL", "lumenquay/midnight-relay"),
       freeDl("freesound", "FLAC · label freebie", "midnight-relay"),
       paid("beatport", 2.29, "WAV", "midnight-relay"),
       paid("bandcamp", 1.5, "FLAC / MP3", "midnight-relay"),
@@ -200,7 +231,6 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["per-te", "disco", "sotto-2", "gratis"],
     offers: [
-      freeDl("soundcloud", "MP3 · free DL", "miracoast/salt-line"),
       paid("bandcamp", 1.0, "MP3 / FLAC", "salt-line"),
       paid("juno", 1.29, "MP3", "salt-line"),
       paid("apple", 1.29, "AAC", "salt-line"),
@@ -281,7 +311,6 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["per-te", "house", "novita", "gratis"],
     offers: [
-      freeDl("soundcloud", "MP3 · free DL", "solaraduo/open-roof"),
       paid("beatport", 2.29, "WAV", "open-roof"),
       paid("traxsource", 1.99, "WAV", "open-roof"),
       paid("juno", 1.89, "WAV", "open-roof"),
@@ -302,7 +331,6 @@ export const TRACKS: Track[] = [
     suggested: false,
     rails: ["novita", "gratis"],
     offers: [
-      freeDl("soundcloud", "MP3 · free DL", "neonfold/static-kiss"),
       paid("bandcamp", 1.5, "FLAC / MP3", "static-kiss"),
       paid("amazon", 1.29, "MP3", "static-kiss"),
       paid("apple", 1.29, "AAC", "static-kiss"),
@@ -362,7 +390,6 @@ export const TRACKS: Track[] = [
     suggested: false,
     rails: ["deep", "sotto-2", "gratis"],
     offers: [
-      freeDl("soundcloud", "MP3 · free DL", "eastpier/harbour-bell"),
       paid("juno", 0.99, "MP3", "harbour-bell"),
       paid("bandcamp", 1.0, "MP3", "harbour-bell"),
       paid("beatport", 1.49, "WAV", "harbour-bell"),
@@ -395,12 +422,116 @@ export const TRACKS: Track[] = [
     suggested: true,
     rails: ["per-te", "techno", "novita", "gratis"],
     offers: [
-      freeDl("soundcloud", "WAV · free DL", "piercircuit/acid-dock"),
       paid("beatport", 2.19, "WAV", "acid-dock"),
       paid("clone", 1.99, "WAV", "acid-dock"),
       paid("hardwax", 2.09, "WAV", "acid-dock"),
       paid("bandcamp", 2.5, "FLAC", "acid-dock"),
       paid("juno", 1.89, "WAV", "acid-dock"),
+    ],
+  },
+  {
+    id: "neon-pallet",
+    title: "Neon Pallet",
+    artist: "Kite Harbor",
+    label: "Bay Lights",
+    genre: "Tech House",
+    bpm: 126,
+    key: "Em",
+    year: 2025,
+    mood: "warehouse",
+    coverHue: 310,
+    suggested: true,
+    rails: ["per-te", "house", "novita"],
+    source: "curated",
+    offers: [
+      paid("beatport", 1.89, "WAV", "neon-pallet"),
+      paid("traxsource", 1.69, "WAV", "neon-pallet"),
+      paid("bandcamp", 2.0, "FLAC", "neon-pallet"),
+      paid("juno", 1.59, "WAV", "neon-pallet"),
+      paid("decks", 1.79, "Digital", "neon-pallet"),
+    ],
+  },
+  {
+    id: "copper-wire",
+    title: "Copper Wire",
+    artist: "Dune Relay",
+    label: "Oxide Room",
+    genre: "Melodic Techno",
+    bpm: 122,
+    key: "Bm",
+    year: 2025,
+    mood: "wide",
+    coverHue: 25,
+    suggested: true,
+    rails: ["per-te", "techno", "novita", "gratis"],
+    source: "curated",
+    offers: [
+      paid("beatport", 2.29, "WAV", "copper-wire"),
+      paid("bandcamp", 1.5, "FLAC", "copper-wire"),
+      paid("bleep", 1.99, "FLAC", "copper-wire"),
+      paid("hardwax", 2.19, "WAV", "copper-wire"),
+    ],
+  },
+  {
+    id: "soft-clamp",
+    title: "Soft Clamp",
+    artist: "Iris Motif",
+    label: "Press Kit",
+    genre: "Deep House",
+    bpm: 118,
+    year: 2024,
+    mood: "velvet",
+    coverHue: 200,
+    suggested: true,
+    rails: ["deep", "per-te", "sotto-2"],
+    source: "curated",
+    offers: [
+      paid("traxsource", 1.39, "WAV", "soft-clamp"),
+      paid("beatport", 1.69, "WAV", "soft-clamp"),
+      paid("bandcamp", 1.0, "MP3 / FLAC", "soft-clamp"),
+      paid("juno", 1.29, "MP3", "soft-clamp"),
+      paid("roughtrade", 1.49, "Digital", "soft-clamp"),
+    ],
+  },
+  {
+    id: "grid-manners",
+    title: "Grid Manners",
+    artist: "Parcel Nine",
+    label: "Cold Room",
+    genre: "Minimal",
+    bpm: 127,
+    year: 2025,
+    mood: "clicky",
+    coverHue: 190,
+    suggested: false,
+    rails: ["techno", "novita"],
+    source: "curated",
+    offers: [
+      paid("beatport", 1.79, "WAV", "grid-manners"),
+      paid("hardwax", 1.69, "WAV", "grid-manners"),
+      paid("clone", 1.59, "WAV", "grid-manners"),
+      paid("whatpeopleplay", 1.49, "WAV", "grid-manners"),
+      paid("discogs", 2.0, "Marketplace", "grid-manners"),
+    ],
+  },
+  {
+    id: "late-ferry",
+    title: "Late Ferry",
+    artist: "Mira Coast",
+    label: "Harbour Press",
+    genre: "Nu Disco",
+    bpm: 114,
+    year: 2025,
+    mood: "crossing",
+    coverHue: 45,
+    suggested: true,
+    rails: ["disco", "per-te", "gratis"],
+    source: "curated",
+    offers: [
+      paid("bandcamp", 1.5, "FLAC", "late-ferry"),
+      paid("traxsource", 1.79, "WAV", "late-ferry"),
+      paid("beatport", 1.99, "WAV", "late-ferry"),
+      paid("apple", 1.29, "AAC", "late-ferry"),
     ],
   },
 ];
@@ -450,7 +581,13 @@ export function getTrack(id: string): Track | undefined {
 export function searchTracks(query: string, genre?: string): Track[] {
   const q = query.trim().toLowerCase();
   return TRACKS.filter((t) => {
-    const genreOk = !genre || genre === "Tutti" || t.genre === genre;
+    const genreFilter = genre?.trim();
+    let genreOk = !genreFilter || genreFilter === "Tutti";
+    if (!genreOk && genreFilter) {
+      genreOk =
+        t.genre === genreFilter ||
+        t.genre.toLowerCase() === genreFilter.toLowerCase();
+    }
     if (!genreOk) return false;
     if (!q) return true;
     return (

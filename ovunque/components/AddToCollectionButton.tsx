@@ -1,15 +1,18 @@
 "use client";
 
 import { useCollection } from "@/components/CollectionProvider";
+import type { Track } from "@/lib/types";
 
 type Props = {
   trackId: string;
+  /** Passa la traccia intera così finisce in wishlist anche se è live iTunes. */
+  track?: Track;
   compact?: boolean;
 };
 
-export function AddToCollectionButton({ trackId, compact }: Props) {
+export function AddToCollectionButton({ trackId, track, compact }: Props) {
   const { has, toggle, ready } = useCollection();
-  const inCol = has(trackId);
+  const inWish = has(trackId);
 
   return (
     <button
@@ -18,23 +21,29 @@ export function AddToCollectionButton({ trackId, compact }: Props) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
-        toggle(trackId);
+        toggle(track ?? trackId);
       }}
       className={
         compact
-          ? `rounded-sm px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider transition ${
-              inCol
+          ? `rounded-dig px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider transition ${
+              inWish
                 ? "bg-ember/20 text-ember"
-                : "border border-white/15 text-mist/70 hover:border-signal/50 hover:text-signal"
+                : "border border-line text-muted hover:border-signal hover:text-signal"
             }`
-          : `rounded-sm px-5 py-3 text-sm font-bold transition ${
-              inCol
+          : `rounded-dig px-5 py-3 text-sm font-bold transition ${
+              inWish
                 ? "border border-ember/40 bg-ember/15 text-ember"
-                : "border border-white/20 text-mist hover:border-signal/60 hover:text-signal"
+                : "border border-line text-mist hover:border-signal hover:text-signal"
             }`
       }
     >
-      {inCol ? (compact ? "In cassa" : "Nella collezione ✓") : compact ? "Aggiungi" : "Aggiungi alla collezione"}
+      {inWish
+        ? compact
+          ? "Wishlist ✓"
+          : "In wishlist ✓"
+        : compact
+          ? "+ Wishlist"
+          : "Salva in wishlist"}
     </button>
   );
 }

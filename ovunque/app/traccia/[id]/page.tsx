@@ -4,163 +4,234 @@ import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
 import { ScanPanel } from "@/components/ScanPanel";
 import { SimilarRail } from "@/components/SimilarRail";
+import { StationButton } from "@/components/StationButton";
 import { StoreOffers } from "@/components/StoreOffers";
+import { TrackCard } from "@/components/TrackCard";
+import { WaveformStrip } from "@/components/WaveformStrip";
 import {
-  cheapestOffer,
   ctaLabel,
+  digitalOffers,
   formatPrice,
   getTrack,
-  sortedOffers,
   TRACKS,
+  vinylOffers,
 } from "@/lib/catalog";
 import { findSimilar, frequentlyTogether } from "@/lib/engines/similar";
+import { itunesLookup } from "@/lib/live/itunes";
 import { scanTrack } from "@/lib/scanners/engine";
 import { storeName } from "@/lib/stores";
-import { TrackCard } from "@/components/TrackCard";
+import type { Track } from "@/lib/types";
 
-type Props = { params: { id: string } };
+type Props = {
+  params: { id: string };
+  searchParams?: { media?: string };
+};
+
+export const dynamicParams = true;
 
 export function generateStaticParams() {
   return TRACKS.map((t) => ({ id: t.id }));
 }
 
-export function generateMetadata({ params }: Props) {
-  const track = getTrack(params.id);
-  if (!track) return { title: "Traccia — OVUNQUE" };
+export async function generateMetadata({ params }: Props) {
+  const track =
+    getTrack(params.id) ??
+    (params.id.startsWith("itunes") ? await itunesLookup(params.id) : null);
+  if (!track) return { title: "Track — Dig List" };
   return {
-    title: `${track.title} — ${track.artist} | OVUNQUE`,
-    description: `Confronta free e prezzi di ${track.title} su ${track.offers.length} portali.`,
+    title: `${track.title} — ${track.artist} | Dig List`,
+    description: `Buy ${track.title} — digital or vinyl, compare stores.`,
   };
 }
 
-export default function TrackPage({ params }: Props) {
-  const track = getTrack(params.id);
+async function resolveTrack(id: string): Promise<Track | null> {
+  const curated = getTrack(id);
+  if (curated) return curated;
+  if (id.startsWith("itunes")) return itunesLookup(id);
+  return null;
+}
+
+export default async function TrackPage({ params, searchParams }: Props) {
+  const track = await resolveTrack(params.id);
   if (!track) notFound();
 
-  const offers = sortedOffers(track);
-  const best = cheapestOffer(track);
-  if (!best) notFound();
+  const digi = digitalOffers(track.offers);
+  const vinyl = vinylOffers(track.offers);
+  const best = digi[0] ?? null;
+  if (!best && digi.length === 0 && vinyl.length === 0) notFound();
 
-  const exclusive = offers.length === 1;
-  const isFree = best.kind === "free" || best.priceEur === 0;
+  const exclusive = digi.length === 1 && vinyl.length === 0;
+  const isFree = best ? best.kind === "free" || best.priceEur === 0 : false;
   const report = scanTrack(track);
-  const paidCount = offers.filter((o) => o.kind === "paid" && o.priceEur > 0).length;
+  const paidKnown = digi.filter(
+    (o) => o.kind === "paid" && o.priceEur != null && o.priceEur > 0,
+  ).length;
   const similar = findSimilar(track.id, 8);
   const together = frequentlyTogether(track.id, 4);
+  const bandcampOffer = digi.find((o) => o.storeId === "bandcamp");
+  const beatportOffer = digi.find((o) => o.storeId === "beatport");
+  const isLive = track.source === "itunes" || track.id.startsWith("itunes");
+  const initialTab = searchParams?.media === "vinyl" && vinyl.length > 0 ? "vinyl" : "digital";
 
   return (
-    <main className="px-5 py-8 md:px-10 md:py-12">
-      <Link href="/" className="text-sm text-mist/45 transition hover:text-signal">
-        ← Torna ai suggerimenti
+    <main className="px-4 py-8 md:px-8 md:py-10">
+      <Link
+        href="/charts"
+        className="text-xs font-bold uppercase tracking-wider text-muted hover:text-signal"
+      >
+        ← Charts
       </Link>
 
-      <div className="mt-8 grid gap-10 lg:grid-cols-[minmax(0,22rem)_1fr] lg:gap-16">
-        <CoverArt
-          hue={track.coverHue}
-          title={track.title}
-          className="aspect-square w-full max-w-sm animate-rise rounded-sm shadow-2xl shadow-black/40"
-        />
+      <div className="mt-6 grid gap-10 lg:grid-cols-[minmax(0,20rem)_1fr] lg:gap-14">
+        <div>
+          <CoverArt
+            hue={track.coverHue}
+            title={track.title}
+            artworkUrl={track.artworkUrl}
+            className="aspect-square w-full max-w-sm border border-line shadow-2xl shadow-black/50"
+          />
+          <WaveformStrip className="mt-4 max-w-sm" />
+          {track.previewUrl ? (
+            <audio controls className="mt-4 w-full max-w-sm" src={track.previewUrl} preload="none">
+              Preview
+            </audio>
+          ) : null}
+        </div>
 
         <div className="space-y-8">
-          <div className="animate-rise" style={{ animationDelay: "80ms" }}>
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-signal">
-              {track.genre}
-              {track.bpm ? ` · ${track.bpm} BPM` : ""}
-              {track.key ? ` · ${track.key}` : ""}
-            </p>
-            <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight text-mist md:text-5xl">
+          <div>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-[0.65rem] font-bold uppercase tracking-[0.2em] text-signal">
+                {track.genre}
+              </p>
+              {isLive ? (
+                <span className="rounded-dig bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase text-ink">
+                  Live track
+                </span>
+              ) : null}
+            </div>
+            <h1 className="mt-2 font-display text-4xl font-black tracking-tight text-mist md:text-5xl">
               {track.title}
             </h1>
-            <p className="mt-2 text-lg text-mist/70">{track.artist}</p>
-            <p className="mt-1 text-sm text-mist/40">
+            <p className="mt-2 text-xl text-bandcamp">{track.artist}</p>
+            <p className="mt-1 text-sm text-muted">
               {track.label} · {track.year}
-              {track.isrc ? ` · ${track.isrc}` : ""}
             </p>
 
+            <dl className="mt-6 grid grid-cols-2 gap-px border border-line bg-line sm:grid-cols-4">
+              {[
+                ["BPM", track.bpm?.toString() ?? "—"],
+                ["Key", track.key ?? "—"],
+                ["Genre", track.genre],
+                ["Digital", String(digi.length)],
+              ].map(([k, v]) => (
+                <div key={k} className="bg-panel px-3 py-3">
+                  <dt className="text-[0.6rem] font-bold uppercase tracking-wider text-muted">{k}</dt>
+                  <dd className="mt-1 font-display text-lg font-bold text-mist">{v}</dd>
+                </div>
+              ))}
+            </dl>
+
             <div
-              className={`mt-6 rounded-sm border p-5 ${
-                isFree
-                  ? "border-signal/40 bg-signal/10"
-                  : "border-white/10 bg-white/[0.03]"
+              className={`mt-6 rounded-dig-lg border p-5 ${
+                isFree ? "border-signal/50 bg-signal/10" : "border-line bg-panel"
               }`}
             >
-              {isFree ? (
+              {best && isFree ? (
                 <>
-                  <p className="text-sm font-semibold text-signal">
-                    Scarica gratis — meglio di Bandcamp
-                  </p>
+                  <p className="text-sm font-bold text-signal">Free download</p>
                   <p className="mt-2 font-display text-2xl font-bold text-mist">
                     {storeName(best.storeId)} · Gratis
                   </p>
-                  {paidCount > 0 && (
-                    <p className="mt-1 text-sm text-mist/55">
-                      Stessa traccia anche a pagamento su {paidCount} portali — free vince.
-                    </p>
-                  )}
                 </>
-              ) : exclusive ? (
+              ) : best ? (
                 <>
-                  <p className="text-sm text-ember">Disponibile solo su un portale</p>
-                  <p className="mt-2 font-display text-2xl font-bold text-mist">
-                    {storeName(best.storeId)} · {formatPrice(best.priceEur)}
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="text-sm text-mist/55">
-                    In vendita su <strong className="text-mist">{offers.length} portali</strong>
-                    {" · "}nessun free trovato
+                  <p className="text-sm text-muted">
+                    Digital · <strong className="text-mist">{digi.length} store</strong>
+                    {paidKnown ? ` · ${paidKnown} con prezzo` : ""}
                   </p>
                   <p className="mt-2 font-display text-2xl font-bold text-mist">
-                    Da {formatPrice(best.priceEur)}{" "}
+                    {formatPrice(best.priceEur, best.kind)}{" "}
                     <span className="text-base font-semibold text-signal">
-                      su {storeName(best.storeId)}
+                      · {storeName(best.storeId)}
                     </span>
                   </p>
                 </>
+              ) : (
+                <p className="text-sm text-muted">Solo vinile disponibile — apri il tab Vinyl.</p>
               )}
-              <div className="mt-4 flex flex-wrap gap-3">
-                <a
-                  href={best.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex rounded-sm bg-signal px-5 py-3 text-sm font-bold text-ink transition hover:brightness-110"
-                >
-                  {ctaLabel(best, exclusive)}
-                </a>
-                <AddToCollectionButton trackId={track.id} />
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {best ? (
+                  <a
+                    href={best.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex rounded-dig bg-signal px-5 py-3 text-sm font-bold text-ink hover:bg-signal-hi"
+                  >
+                    {ctaLabel(best, exclusive)}
+                  </a>
+                ) : null}
+                {vinyl.length > 0 ? (
+                  <a
+                    href="#buy"
+                    className="rounded-dig border border-signal/50 px-4 py-3 text-sm font-bold text-signal hover:bg-signal hover:text-ink"
+                  >
+                    Vinyl ({vinyl.length}) →
+                  </a>
+                ) : null}
+                {beatportOffer ? (
+                  <a
+                    href={beatportOffer.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal"
+                  >
+                    Beatport
+                  </a>
+                ) : null}
+                {bandcampOffer ? (
+                  <a
+                    href={bandcampOffer.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-dig border border-bandcamp/40 px-4 py-3 text-sm font-semibold text-bandcamp hover:bg-bandcamp/10"
+                  >
+                    Bandcamp
+                  </a>
+                ) : null}
+                <StationButton track={track} />
+                <AddToCollectionButton trackId={track.id} track={track} />
               </div>
             </div>
           </div>
 
-          <StoreOffers offers={offers} />
+          <StoreOffers offers={track.offers} initialTab={initialTab} />
           <ScanPanel report={report} />
         </div>
       </div>
 
-      <div className="mt-16 space-y-14">
-        <SimilarRail
-          title="Dischi simili"
-          subtitle="Come Diggleist: genere, BPM, mood, label — i più vicini a questo"
-          hits={similar}
-        />
-
-        {together.length > 0 ? (
-          <section className="space-y-4">
-            <h2 className="font-display text-xl font-bold text-mist md:text-2xl">
-              Spesso presi insieme
-            </h2>
-            <p className="text-sm text-mist/50">
-              Stile Amazon: chi guarda questa traccia guarda anche queste.
-            </p>
-            <div className="flex gap-4 overflow-x-auto pb-2 md:gap-5">
-              {together.map((t, i) => (
-                <TrackCard key={t.id} track={t} index={i} />
-              ))}
-            </div>
-          </section>
-        ) : null}
-      </div>
+      {similar.length > 0 || together.length > 0 ? (
+        <div className="mt-16 space-y-14">
+          <SimilarRail
+            title="Fans also bought"
+            subtitle="Simili dalla wishlist Dig List"
+            hits={similar}
+          />
+          {together.length > 0 ? (
+            <section className="space-y-4">
+              <h2 className="font-display text-xl font-bold text-mist md:text-2xl">
+                Frequently bought together
+              </h2>
+              <div className="flex gap-4 overflow-x-auto pb-2 md:gap-5">
+                {together.map((t, i) => (
+                  <TrackCard key={t.id} track={t} index={i} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      ) : null}
     </main>
   );
 }

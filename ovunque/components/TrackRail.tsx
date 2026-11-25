@@ -12,11 +12,11 @@ export function TrackRail({ title, subtitle, tracks }: Props) {
 
   return (
     <section className="space-y-4">
-      <div className="px-5 md:px-10">
+      <div className="px-4 md:px-8">
         <h2 className="font-display text-xl font-bold text-mist md:text-2xl">{title}</h2>
-        <p className="mt-1 text-sm text-mist/50">{subtitle}</p>
+        <p className="mt-1 text-sm text-muted">{subtitle}</p>
       </div>
-      <div className="flex gap-4 overflow-x-auto px-5 pb-2 scrollbar-thin md:gap-5 md:px-10">
+      <div className="flex gap-4 overflow-x-auto px-4 pb-2 scrollbar-thin md:gap-5 md:px-8">
         {tracks.map((track, i) => (
           <TrackCard key={track.id} track={track} index={i} />
         ))}
