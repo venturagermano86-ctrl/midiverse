@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
+import { spawn } from "child_process";
 import { getGenre, getVariation } from "@/lib/genres";
 import { clampBpm, pitchNudgeForKey } from "@/lib/keys";
 import { getSinger } from "@/lib/singers";
@@ -11,18 +12,19 @@ import {
   normalizeMediaUrl,
 } from "@/lib/youtube";
 import { analyzeFromMeta } from "@/lib/mood";
-import { synthesizeVocalMp3 } from "@/lib/tts-node";
+import { renderPhrase, type VocalEngine } from "@/lib/tts-node";
+import { planRemake } from "@/lib/remake";
+import { buildStemBundle } from "@/lib/stems";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 60;
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
-const MAX_LENGTH_SEC = 32;
-const ALLOWED_MODES = new Set(["generate", "overlay", "reference"]);
+const MAX_LENGTH_SEC = 64;
+const ALLOWED_MODES = new Set(["generate", "overlay", "reference", "remake"]);
 
-/** Tiny in-memory rate limit (per isolate). */
 const hits = new Map<string, { n: number; reset: number }>();
-function rateLimit(key: string, limit = 8, windowMs = 60_000): boolean {
+function rateLimit(key: string, limit = 6, windowMs = 60_000): boolean {
   const now = Date.now();
   const cur = hits.get(key);
   if (!cur || now > cur.reset) {
@@ -32,6 +34,29 @@ function rateLimit(key: string, limit = 8, windowMs = 60_000): boolean {
   if (cur.n >= limit) return false;
   cur.n += 1;
   return true;
+}
+
+function zipFiles(
+  cwd: string,
+  zipName: string,
+  files: string[]
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const out = path.join(cwd, zipName);
+    const child = spawn("zip", ["-j", "-q", out, ...files], {
+      cwd,
+      stdio: ["ignore", "ignore", "pipe"],
+    });
+    let err = "";
+    child.stderr?.on("data", (d) => {
+      err += String(d);
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) resolve(out);
+      else reject(new Error(`zip_${code}:${err.slice(0, 80)}`));
+    });
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -55,13 +80,15 @@ export async function POST(req: NextRequest) {
       MAX_LENGTH_SEC,
       Math.max(12, Number(form.get("lengthSec") || 32) || 32)
     );
-    const modeRaw = String(form.get("mode") || "generate");
-    const mode = ALLOWED_MODES.has(modeRaw) ? modeRaw : "generate";
+    const modeRaw = String(form.get("mode") || "remake");
+    const mode = ALLOWED_MODES.has(modeRaw) ? modeRaw : "remake";
     const sourceUrlRaw = String(form.get("sourceUrl") || "").trim();
     const bpmRaw = form.get("bpm");
     const keyId = String(form.get("key") || "Am").trim() || "Am";
     const singerId = String(form.get("singerId") || "house-soul-f").trim();
     const singer = getSinger(singerId);
+    const wantStems = String(form.get("stems") || "1") !== "0";
+    const format = String(form.get("format") || "zip").toLowerCase();
     const userBpm =
       bpmRaw !== null && String(bpmRaw).trim() !== ""
         ? clampBpm(Number(bpmRaw))
@@ -69,7 +96,7 @@ export async function POST(req: NextRequest) {
     const keyNudge = pitchNudgeForKey(keyId);
     const variation = getVariation(genreId, variationId);
 
-    if (mode !== "reference" && !variation) {
+    if (mode !== "reference" && mode !== "remake" && !variation) {
       return NextResponse.json(
         { error: "Genere o variazione non validi" },
         { status: 400 }
@@ -81,7 +108,7 @@ export async function POST(req: NextRequest) {
 
     const file = form.get("track");
     if (
-      (mode === "overlay" || mode === "reference") &&
+      (mode === "overlay" || mode === "reference" || mode === "remake") &&
       file &&
       typeof file !== "string"
     ) {
@@ -102,13 +129,13 @@ export async function POST(req: NextRequest) {
           bpmHint: userBpm ?? undefined,
         }),
         sourceMode: "audio",
-        note: "Mood dal file + cantante scelto — frasi originali.",
+        note: "Mood dal file — remake con parole nuove, stesse note/durata.",
       };
     }
 
     if (
       sourceUrlRaw &&
-      (mode === "reference" || mode === "overlay") &&
+      (mode === "reference" || mode === "overlay" || mode === "remake") &&
       !hasUpload
     ) {
       if (!isAllowedMediaUrl(sourceUrlRaw)) {
@@ -136,7 +163,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    if (mode === "reference" && !analysis) {
+    if ((mode === "reference" || mode === "remake") && !analysis) {
       return NextResponse.json(
         {
           error:
@@ -163,35 +190,60 @@ export async function POST(req: NextRequest) {
         ? clampBpm(analysis.bpm as number)
         : genreMid);
 
-    const dryPhrases =
+    const refDry =
       (analysis?.dry as string[] | undefined) ||
       variation?.phrases.dry ||
       ["hold the mark", "spin the gate"];
-    const wetPhrases =
+    const refWet =
       (analysis?.wet as string[] | undefined) ||
       variation?.phrases.wet ||
       ["don't let go", "open it wide"];
 
     const clean = (s: string) =>
       s.replace(/(.)\1{2,}/g, "$1$1").replace(/\s+/g, " ").trim();
-    const dry = dryPhrases.map(clean).slice(0, 2);
-    const wet = wetPhrases.map(clean).slice(0, 2);
 
-    void keyNudge;
-    void bpm;
-
-    const outMp3 = path.join(tmp, "mix.mp3");
-    const engine = await synthesizeVocalMp3({
-      dry,
-      wet,
-      lengthSec,
-      dest: outMp3,
-      elevenVoiceId: singer.elevenVoiceId,
-      edgeVoice:
+    // Sistema nostro: remake = parole diverse, stesso mood, schema note, voce vicina
+    const remake = planRemake({
+      packId: String(analysis?.packId || analysis?.bank || ""),
+      label: String(analysis?.label || singer.label),
+      voice:
         (analysis?.voice as string | undefined) || singer.edgeVoice || "jenny",
+      wetVoice: analysis?.wetVoice as string | undefined,
+      keyId,
+      avoidDry: refDry,
+      avoidWet: refWet,
+      seedKey: `${analysis?.sourceUrl || ""}|${analysis?.sourceTitle || ""}|${bpm}|${keyId}|${lengthSec}`,
     });
 
-    const mp3 = await fs.readFile(outMp3);
+    const dry = remake.dry.map(clean);
+    const wet = remake.wet.map(clean);
+
+    void keyNudge;
+
+    let engine: VocalEngine = "demo";
+    const workDir = path.join(tmp, "stems");
+    await fs.mkdir(workDir, { recursive: true });
+
+    const bundle = await buildStemBundle({
+      dryPhrases: dry,
+      wetPhrases: wet,
+      lengthSec,
+      workDir,
+      dryVoice: remake.dryVoice,
+      wetVoice: remake.wetVoice,
+      notes: remake.notes,
+      renderPhrase: async (text, dest, voice) => {
+        const used = await renderPhrase({
+          text,
+          dest,
+          edgeVoice: voice,
+          elevenVoiceId: singer.elevenVoiceId,
+        });
+        if (used === "elevenlabs") engine = "elevenlabs";
+        else if (used === "edge" && engine !== "elevenlabs") engine = "edge";
+      },
+    });
+
     const payloadAnalysis = {
       ...(analysis || {}),
       bpm,
@@ -201,20 +253,62 @@ export async function POST(req: NextRequest) {
       engine,
       dry,
       wet,
-      note:
-        engine === "elevenlabs"
-          ? "Cantato ElevenLabs ([sings]) — usabile in release con piano a pagamento."
-          : engine === "edge"
-            ? "Anteprima neurale (più umana della demo Google) — per release serve ElevenLabs a pagamento."
-            : "Anteprima demo — NON pubblicare. Aggiungi ELEVENLABS_API_KEY (piano a pagamento) per cantato reale.",
-      releaseReady: engine === "elevenlabs",
+      refDry: refDry.map(clean),
+      refWet: refWet.map(clean),
+      dryVoice: remake.dryVoice,
+      wetVoice: remake.wetVoice,
+      notes: remake.notes,
+      bank: remake.bank,
+      lengthSec,
+      stems: ["dry", "wet", "mix"],
+      mode,
+      note: remake.note,
+      releaseReady: false,
+      system: "midiverse-remake-v1",
     };
 
+    if (wantStems && format === "json") {
+      const [dryBuf, wetBuf, mixBuf] = await Promise.all([
+        fs.readFile(bundle.dryPath),
+        fs.readFile(bundle.wetPath),
+        fs.readFile(bundle.mixPath),
+      ]);
+      return NextResponse.json({
+        analysis: payloadAnalysis,
+        stems: {
+          dry: dryBuf.toString("base64"),
+          wet: wetBuf.toString("base64"),
+          mix: mixBuf.toString("base64"),
+        },
+      });
+    }
+
+    if (wantStems) {
+      const zipPath = await zipFiles(tmp, "vocal-stems.zip", [
+        bundle.dryPath,
+        bundle.wetPath,
+        bundle.mixPath,
+      ]);
+      const zipBuf = await fs.readFile(zipPath);
+      return new NextResponse(zipBuf, {
+        status: 200,
+        headers: {
+          "Content-Type": "application/zip",
+          "Content-Disposition": `attachment; filename="vocal-stems-remake.zip"`,
+          "X-Vocal-Analysis": encodeURIComponent(
+            JSON.stringify(payloadAnalysis)
+          ),
+          "Cache-Control": "no-store",
+        },
+      });
+    }
+
+    const mp3 = await fs.readFile(bundle.mixPath);
     return new NextResponse(mp3, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
-        "Content-Disposition": `attachment; filename="vocal-studio-${mode}.mp3"`,
+        "Content-Disposition": `attachment; filename="vocal-studio-remake.mp3"`,
         "X-Vocal-Analysis": encodeURIComponent(JSON.stringify(payloadAnalysis)),
         "Cache-Control": "no-store",
       },

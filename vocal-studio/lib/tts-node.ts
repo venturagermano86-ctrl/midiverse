@@ -3,11 +3,13 @@ import path from "path";
 import os from "os";
 
 /**
- * Melodic / human vocal synthesis.
- * 1) ElevenLabs eleven_v3 with [sings] tags (release-ready when paid key set)
- * 2) Optional Edge TTS (more human than Google; may fail on some hosts)
- * 3) Google TTS last-resort demo only
+ * Free-first melodic vocal synthesis (sistema nostro).
+ * 1) Edge TTS neural (best free human cadence)
+ * 2) Optional ElevenLabs if key present (not required)
+ * 3) Google TTS last-resort
  */
+
+export type VocalEngine = "edge" | "elevenlabs" | "demo";
 
 export async function ttsElevenLabsSung(
   text: string,
@@ -17,7 +19,6 @@ export async function ttsElevenLabsSung(
   const apiKey = process.env.ELEVENLABS_API_KEY?.trim();
   if (!apiKey || !voiceId) return false;
 
-  // Short sung lines hold melody better than long spoken blocks
   const sung = text.trim().startsWith("[")
     ? text.trim()
     : `[sings][softly][drawn out] ${text.trim()}`;
@@ -59,10 +60,6 @@ export async function ttsElevenLabsSung(
   return false;
 }
 
-function concatMp3(parts: Buffer[]): Buffer {
-  return Buffer.concat(parts);
-}
-
 async function ttsGoogleChunk(text: string): Promise<Buffer> {
   const url =
     "https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=en&q=" +
@@ -87,26 +84,27 @@ async function ttsGoogle(text: string, dest: string): Promise<void> {
   await fs.writeFile(dest, await ttsGoogleChunk(clean));
 }
 
-/** Edge neural voices — more human cadence than Google (best-effort). */
-async function ttsEdgeBestEffort(
+const EDGE_MAP: Record<string, string> = {
+  jenny: "en-US-JennyNeural",
+  aria: "en-US-AriaNeural",
+  sonia: "en-GB-SoniaNeural",
+  guy: "en-US-GuyNeural",
+  brian: "en-US-BrianNeural",
+  michelle: "en-US-MichelleNeural",
+  emma: "en-US-EmmaNeural",
+  natasha: "en-AU-NatashaNeural",
+  libby: "en-GB-LibbyNeural",
+};
+
+/** Edge neural voices — primary free engine. */
+export async function ttsEdgeBestEffort(
   text: string,
   voiceKey: string,
   dest: string
 ): Promise<boolean> {
   try {
     const { MsEdgeTTS, OUTPUT_FORMAT } = await import("msedge-tts");
-    const map: Record<string, string> = {
-      jenny: "en-US-JennyNeural",
-      aria: "en-US-AriaNeural",
-      sonia: "en-GB-SoniaNeural",
-      guy: "en-US-GuyNeural",
-      brian: "en-US-BrianNeural",
-      michelle: "en-US-MichelleNeural",
-      emma: "en-US-EmmaNeural",
-      natasha: "en-AU-NatashaNeural",
-      libby: "en-GB-LibbyNeural",
-    };
-    const voice = map[voiceKey] || map.jenny;
+    const voice = EDGE_MAP[voiceKey] || EDGE_MAP.jenny;
     const tts = new MsEdgeTTS();
     await tts.setMetadata(voice, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3);
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "edge-mel-"));
@@ -132,32 +130,31 @@ async function ttsEdgeBestEffort(
   }
 }
 
-async function renderLine(opts: {
+export async function renderPhrase(opts: {
   text: string;
   dest: string;
+  edgeVoice: string;
   elevenVoiceId?: string;
-  edgeVoice?: string;
-}): Promise<"elevenlabs" | "edge" | "demo"> {
+}): Promise<VocalEngine> {
+  // Free-first: Edge before ElevenLabs (sistema nostro senza pagare)
+  if (await ttsEdgeBestEffort(opts.text, opts.edgeVoice, opts.dest)) {
+    return "edge";
+  }
   if (
     opts.elevenVoiceId &&
     (await ttsElevenLabsSung(opts.text, opts.elevenVoiceId, opts.dest))
   ) {
     return "elevenlabs";
   }
-  if (
-    opts.edgeVoice &&
-    (await ttsEdgeBestEffort(opts.text, opts.edgeVoice, opts.dest))
-  ) {
-    return "edge";
-  }
   await ttsGoogle(opts.text, opts.dest);
   return "demo";
 }
 
-/**
- * Call/response as short melodic lines (sung when ElevenLabs is available).
- * Concat MP3s — no ffmpeg required.
- */
+function concatMp3(parts: Buffer[]): Buffer {
+  return Buffer.concat(parts);
+}
+
+/** Legacy single-file mix (no stems). */
 export async function synthesizeVocalMp3(opts: {
   dry: string[];
   wet: string[];
@@ -165,7 +162,7 @@ export async function synthesizeVocalMp3(opts: {
   dest: string;
   elevenVoiceId?: string;
   edgeVoice?: string;
-}): Promise<"elevenlabs" | "edge" | "demo"> {
+}): Promise<VocalEngine> {
   const rounds = Math.max(2, Math.min(5, Math.floor(opts.lengthSec / 8)));
   const lines: string[] = [];
   for (let i = 0; i < rounds; i++) {
@@ -175,12 +172,12 @@ export async function synthesizeVocalMp3(opts: {
 
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vs-sung-"));
   const buffers: Buffer[] = [];
-  let engine: "elevenlabs" | "edge" | "demo" = "demo";
+  let engine: VocalEngine = "demo";
 
   try {
     for (let i = 0; i < lines.length; i++) {
       const dest = path.join(tmp, `line${i}.mp3`);
-      const used = await renderLine({
+      const used = await renderPhrase({
         text: lines[i],
         dest,
         elevenVoiceId: opts.elevenVoiceId,
@@ -195,22 +192,4 @@ export async function synthesizeVocalMp3(opts: {
     fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
   }
   return engine;
-}
-
-// Back-compat export used nowhere critical
-export async function ttsPhrase(opts: {
-  text: string;
-  edgeVoice: string;
-  rate: number;
-  pitchHz: number;
-  dest: string;
-  elevenVoiceId?: string;
-}): Promise<"elevenlabs" | "demo"> {
-  const e = await renderLine({
-    text: opts.text,
-    dest: opts.dest,
-    elevenVoiceId: opts.elevenVoiceId,
-    edgeVoice: opts.edgeVoice,
-  });
-  return e === "elevenlabs" ? "elevenlabs" : "demo";
 }
