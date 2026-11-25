@@ -1,45 +1,68 @@
 import { NextResponse } from "next/server";
+<<<<<<< HEAD
 import { buildDigList, digSearchQuery, type DigMode } from "@/lib/engines/diglist";
 import type { BuyerCollection } from "@/lib/engines/diglistBuyers";
 import { scoutBandcampBuyers } from "@/lib/live/bandcampScout";
 import { scoutDiscogsGraph } from "@/lib/live/discogsScout";
 import { scoutItunesArtists } from "@/lib/live/itunesArtistScout";
+=======
+import {
+  runDiglistSocial,
+  type DigSocialMode,
+} from "@/lib/engines/diglistSocial";
+>>>>>>> d3a9c7d (Diglist social croce engine for Short/Long and Station)
 import { enrichPreviews } from "@/lib/live/enrichPreview";
 import { sanitizeTrack } from "@/lib/sanitizeTrack";
-import { buyerCollectionsForSeeds } from "@/lib/wishlist";
 import type { Track } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 45;
 
+/**
+ * Diglist Short/Long — motore sociale a croce (11 passi Diglist).
+ * Genere solo per filtri finali, non decide l'ingresso.
+ */
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
     seeds?: Track[];
-    mode?: DigMode;
+    owned?: Track[];
+    mode?: DigSocialMode;
+    bandcampUser?: string;
+    audioCompare?: boolean;
   };
 
   const seeds = (body.seeds ?? [])
     .map((t) => sanitizeTrack(t))
     .filter((t): t is Track => !!t?.id && !!t?.title)
     .slice(0, 6);
-  const mode: DigMode = body.mode === "long" ? "long" : "short";
 
-  if (seeds.length === 0) {
+  const owned = (body.owned ?? [])
+    .map((t) => sanitizeTrack(t))
+    .filter((t): t is Track => !!t?.id && !!t?.title)
+    .slice(0, 400);
+
+  const mode: DigSocialMode =
+    body.mode === "long" ? "long" : body.mode === "station" ? "station" : "short";
+
+  if (seeds.length === 0 && owned.length === 0) {
     return NextResponse.json({ error: "pick_required" }, { status: 400 });
   }
 
-  let realBuyers: BuyerCollection[] = [];
-  try {
-    const cols = await buyerCollectionsForSeeds(seeds.map((s) => s.id));
-    realBuyers = cols.map((c) => ({
-      buyerId: c.buyerId,
-      trackIds: c.trackIds,
-      seedHits: c.seedHits,
-    }));
-  } catch {
-    realBuyers = [];
-  }
+  const bandcampUser =
+    typeof body.bandcampUser === "string"
+      ? body.bandcampUser.replace(/^@/, "").trim().slice(0, 40)
+      : undefined;
 
+  try {
+    const result = await runDiglistSocial({
+      mode,
+      seeds,
+      ownedLocal: owned,
+      bandcampUser: bandcampUser || undefined,
+      audioCompare: body.audioCompare === true,
+    });
+
+<<<<<<< HEAD
   const hasBcUrl = seeds.some((s) =>
     s.offers?.some(
       (o) =>
@@ -101,23 +124,62 @@ export async function POST(req: Request) {
         discogs: discogsTracks.length,
         itunes: itunesTracks.length,
         web: result.web.length,
+=======
+    const tracks = await enrichPreviews(
+      result.tracks.map((h) => h.track),
+      mode === "long" ? 8 : 5,
+    );
+
+    // rimappa score/reasons
+    const enriched = tracks.map((t, i) => {
+      const hit = result.tracks[i];
+      return {
+        ...t,
+        // keep track fields; client uses note
+        _dig: hit
+          ? {
+              score: hit.score,
+              croceBuyers: hit.croceBuyers,
+              reasons: hit.reasons,
+              genre: hit.genre,
+            }
+          : undefined,
+      };
+    });
+
+    // generi per filtri (passo 11) — non usati per ranking
+    const genres = Array.from(
+      new Set(result.tracks.map((h) => h.genre).filter(Boolean)),
+    ).sort();
+
+    return NextResponse.json(
+      {
+        mode,
+        tracks: enriched,
+        hits: result.tracks.map((h) => ({
+          id: h.track.id,
+          score: h.score,
+          croceBuyers: h.croceBuyers,
+          reasons: h.reasons,
+          genre: h.genre,
+        })),
+        genres,
+        note: result.note,
+        method: result.method,
+        bandcampLive: result.bandcampLive,
+        audioActive: result.audioActive,
+        stats: result.stats,
+        seeds: seeds.map((t) => ({
+          id: t.id,
+          title: t.title,
+          artist: t.artist,
+          label: t.label,
+        })),
+>>>>>>> d3a9c7d (Diglist social croce engine for Short/Long and Station)
       },
-      croci: result.croci.slice(0, 8).map((c) => ({
-        trackId: c.trackId,
-        buyers: c.buyers,
-        seedLinks: c.seedLinks,
-        multiSeedBuyers: c.multiSeedBuyers,
-        score: c.score,
-      })),
-      seeds: seeds.map((t) => ({
-        id: t.id,
-        title: t.title,
-        artist: t.artist,
-        label: t.label,
-        genre: t.genre,
-      })),
-      queryHint: digSearchQuery(seeds),
-    },
-    { headers: { "cache-control": "private, no-store" } },
-  );
+      { headers: { "cache-control": "private, no-store" } },
+    );
+  } catch {
+    return NextResponse.json({ error: "diglist_failed" }, { status: 500 });
+  }
 }

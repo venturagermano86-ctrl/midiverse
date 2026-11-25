@@ -1,76 +1,98 @@
 import { NextResponse } from "next/server";
 import { getTrack } from "@/lib/catalog";
-import { buildStationQueue, stationSearchQuery } from "@/lib/engines/station";
-import { itunesLookup, itunesSearch } from "@/lib/live/itunes";
+import { runStationSocial } from "@/lib/engines/diglistSocial";
+import { enrichPreviews } from "@/lib/live/enrichPreview";
+import { itunesLookup } from "@/lib/live/itunes";
+import { sanitizeTrack } from "@/lib/sanitizeTrack";
 import type { Track } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 type Ctx = { params: { id: string } };
 
 async function resolveSeed(id: string, bodyTrack?: Track | null): Promise<Track | null> {
-  if (bodyTrack?.id === id) return bodyTrack;
+  if (bodyTrack?.id === id) return sanitizeTrack(bodyTrack) ?? bodyTrack;
   const curated = getTrack(id);
   if (curated) return curated;
   if (id.startsWith("itunes")) return itunesLookup(id);
   return null;
 }
 
+async function stationPayload(seed: Track, body: {
+  owned?: Track[];
+  bandcampUser?: string;
+}) {
+  const owned = (body.owned ?? [])
+    .map((t) => sanitizeTrack(t))
+    .filter((t): t is Track => !!t?.id && !!t?.title)
+    .slice(0, 400);
+
+  const bandcampUser =
+    typeof body.bandcampUser === "string"
+      ? body.bandcampUser.replace(/^@/, "").trim().slice(0, 40)
+      : undefined;
+
+  const result = await runStationSocial(seed, {
+    bandcampUser: bandcampUser || undefined,
+    ownedLocal: owned,
+  });
+
+  const tracks = await enrichPreviews(
+    result.tracks.map((h) => h.track),
+    5,
+  );
+
+  return {
+    seedId: seed.id,
+    count: tracks.length,
+    note: result.note,
+    method: result.method,
+    bandcampLive: result.bandcampLive,
+    audioActive: result.audioActive,
+    stats: result.stats,
+    items: tracks.map((track, i) => ({
+      index: i,
+      reason: result.tracks[i]?.reasons.join(" · ") || "Diglist croce",
+      track,
+      score: result.tracks[i]?.score,
+      croceBuyers: result.tracks[i]?.croceBuyers,
+    })),
+  };
+}
+
+/** Station = stesso incrocio Diglist, 1 seed. */
 export async function GET(_req: Request, { params }: Ctx) {
   const seed = await resolveSeed(params.id);
   if (!seed) {
     return NextResponse.json({ error: "track_not_found" }, { status: 404 });
   }
-
-  let live: Track[] = [];
   try {
-    live = await itunesSearch(stationSearchQuery(seed), 20);
+    const payload = await stationPayload(seed, {});
+    return NextResponse.json(payload, {
+      headers: { "cache-control": "private, no-store" },
+    });
   } catch {
-    live = [];
+    return NextResponse.json({ error: "station_failed" }, { status: 500 });
   }
-
-  const queue = buildStationQueue(seed, live, 24);
-  return NextResponse.json(
-    {
-      seedId: seed.id,
-      count: queue.length,
-      note: "Station · dischi molto simili (Dig List / SoundCloud style)",
-      items: queue.map((item, i) => ({
-        index: i,
-        reason: item.reason,
-        track: item.track,
-      })),
-    },
-    { headers: { "cache-control": "private, no-store" } },
-  );
 }
 
 export async function POST(req: Request, { params }: Ctx) {
-  const body = (await req.json().catch(() => ({}))) as { track?: Track };
+  const body = (await req.json().catch(() => ({}))) as {
+    track?: Track;
+    owned?: Track[];
+    bandcampUser?: string;
+  };
   const seed = await resolveSeed(params.id, body.track ?? null);
   if (!seed) {
     return NextResponse.json({ error: "track_not_found" }, { status: 404 });
   }
-
-  let live: Track[] = [];
   try {
-    live = await itunesSearch(stationSearchQuery(seed), 20);
+    const payload = await stationPayload(seed, body);
+    return NextResponse.json(payload, {
+      headers: { "cache-control": "private, no-store" },
+    });
   } catch {
-    live = [];
+    return NextResponse.json({ error: "station_failed" }, { status: 500 });
   }
-
-  const queue = buildStationQueue(seed, live, 24);
-  return NextResponse.json(
-    {
-      seedId: seed.id,
-      count: queue.length,
-      note: "Station · lista dig molto simili",
-      items: queue.map((item, i) => ({
-        index: i,
-        reason: item.reason,
-        track: item.track,
-      })),
-    },
-    { headers: { "cache-control": "private, no-store" } },
-  );
 }

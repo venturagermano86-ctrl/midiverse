@@ -6,11 +6,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
 import { RecordShelf } from "@/components/RecordShelf";
+import { useWishlist } from "@/components/CollectionProvider";
 import {
   digitalOffers,
   formatOfferPrice,
   getTrack,
 } from "@/lib/catalog";
+import { getBandcampUsername } from "@/lib/bandcampProfile";
 import {
   getPlayingSrc,
   playPreview,
@@ -30,13 +32,15 @@ type StationRow = {
 export default function StationPage() {
   const params = useParams();
   const id = decodeURIComponent(String(params.id ?? ""));
+  const { tracks: owned } = useWishlist();
   const [items, setItems] = useState<StationRow[]>([]);
-  const [note, setNote] = useState("Avvio Station…");
+  const [note, setNote] = useState("Avvio Station Diglist…");
   const [cursor, setCursor] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const current = items[cursor]?.track ?? null;
+  const ownedLen = owned.length;
 
   useEffect(() => {
     let cancelled = false;
@@ -56,13 +60,17 @@ export default function StationPage() {
         const res = await fetch(`/api/station/${encodeURIComponent(id)}`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ track: seed }),
+          body: JSON.stringify({
+            track: seed,
+            owned: owned.slice(0, 400),
+            bandcampUser: getBandcampUsername() || undefined,
+          }),
         });
         const data = await res.json();
         if (cancelled) return;
         if (res.ok && Array.isArray(data.items)) {
           setItems(data.items);
-          setNote(data.note || "Station · dischi molto simili");
+          setNote(data.note || "Station · Diglist croce (stesso motore Short/Long)");
           setCursor(0);
         } else {
           setNote("Station non disponibile per questa traccia.");
@@ -77,7 +85,9 @@ export default function StationPage() {
       cancelled = true;
       stopPreview();
     };
-  }, [id]);
+    // ownedLen: evita loop su nuova ref array
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, ownedLen]);
 
   useEffect(() => {
     return subscribePreview((src) => {
