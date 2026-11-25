@@ -1,12 +1,15 @@
 import type { Metadata } from "next";
-import "@fontsource/archivo/400.css";
-import "@fontsource/archivo/500.css";
-import "@fontsource/archivo/600.css";
-import "@fontsource/archivo/700.css";
-import "@fontsource/archivo/900.css";
+import { Archivo } from "next/font/google";
 import { CollectionProvider } from "@/components/CollectionProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
+
+const archivo = Archivo({
+  subsets: ["latin", "latin-ext"],
+  weight: ["400", "500", "600", "700", "800", "900"],
+  display: "swap",
+  variable: "--font-archivo",
+});
 
 export const metadata: Metadata = {
   title: "Dig List · Store (private)",
@@ -16,8 +19,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="it">
-      <body className="atmosphere antialiased">
+    <html lang="it" className={archivo.variable}>
+      <body className={`${archivo.className} atmosphere antialiased`}>
         <CollectionProvider>
           <SiteHeader />
           {children}

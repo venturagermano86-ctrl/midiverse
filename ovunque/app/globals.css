@@ -20,7 +20,7 @@
   --bandcamp: #1da0c3;
   --radius: 10px;
   --radius-lg: 16px;
-  --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font: var(--font-archivo), "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
 
   /* Tailwind aliases used across components */
