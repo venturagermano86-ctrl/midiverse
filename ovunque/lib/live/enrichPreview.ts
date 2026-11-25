@@ -25,7 +25,7 @@ export async function enrichPreviews(tracks: Track[], concurrency = 4): Promise<
           const hits = await itunesSearch(`${t.artist} ${t.title}`, 5);
           const nt = norm(t.title);
           const na = norm(t.artist);
-          const match =
+          let match =
             hits.find(
               (h) =>
                 norm(h.title) === nt &&
@@ -34,7 +34,14 @@ export async function enrichPreviews(tracks: Track[], concurrency = 4): Promise<
                   na.includes(norm(h.artist))),
             ) ||
             hits.find((h) => norm(h.title).includes(nt) || nt.includes(norm(h.title))) ||
-            hits[0];
+            hits.find((h) => !!h.previewUrl);
+
+          // Catalogo curato demo: niente match → preview del genere (sempre ▶)
+          if (!match?.previewUrl) {
+            const genreQ = `${t.genre || "electronic"} ${t.mood || "house"}`.trim();
+            const genreHits = await itunesSearch(genreQ, 8);
+            match = genreHits.find((h) => !!h.previewUrl) ?? genreHits[0];
+          }
           if (!match?.previewUrl) return;
           out[i] = {
             ...t,
@@ -61,11 +68,20 @@ export async function lookupPreview(
     const hits = await itunesSearch(`${artist} ${title}`, 5);
     const nt = norm(title);
     const na = norm(artist);
-    const match =
+    let match =
       hits.find((h) => norm(h.title) === nt && norm(h.artist).includes(na)) ||
       hits.find((h) => norm(h.title).includes(nt)) ||
-      hits[0];
-    if (!match) return null;
+      hits.find((h) => !!h.previewUrl);
+
+    if (!match?.previewUrl) {
+      const genreHits = await itunesSearch(`electronic ${artist}`.slice(0, 80), 8);
+      match = genreHits.find((h) => !!h.previewUrl) ?? genreHits[0];
+    }
+    if (!match?.previewUrl) {
+      const fallback = await itunesSearch("deep house techno", 6);
+      match = fallback.find((h) => !!h.previewUrl) ?? null;
+    }
+    if (!match?.previewUrl) return null;
     return { previewUrl: match.previewUrl, artworkUrl: match.artworkUrl };
   } catch {
     return null;
