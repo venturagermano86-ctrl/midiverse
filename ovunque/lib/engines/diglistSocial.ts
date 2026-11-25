@@ -83,7 +83,60 @@ function isJunk(artist: string, title: string): boolean {
   const s = `${artist} ${title}`;
   const latin = (s.match(/[A-Za-z0-9]/g) || []).length;
   if (latin < 4) return true;
-  if (/пиздец|какашк/i.test(s)) return true;
+  if (/пиздец|какашк|topolino|mickey/i.test(s)) return true;
+  return false;
+}
+
+/** Hard gate: entra solo se correlato ai pick (niente topolino). */
+function isCorrelated(seeds: Track[], candidate: Track, reason: string): boolean {
+  const ca = candidate.artist.toLowerCase();
+  const cl = (candidate.label || "").toLowerCase();
+
+  // 1) stesso artista (anche feat / & )
+  for (const s of seeds) {
+    const sa = s.artist.toLowerCase();
+    if (ca === sa) return true;
+    if (ca.includes(sa) || sa.includes(ca)) return true;
+    const parts = sa.split(/\s*(?:&|,|feat\.?|ft\.?|x)\s*/i).filter((p) => p.length > 2);
+    if (parts.some((p) => ca.includes(p))) return true;
+  }
+
+  // 2) stessa label reale
+  for (const s of seeds) {
+    const sl = (s.label || "").toLowerCase();
+    if (sl && sl !== "—" && sl !== "x" && sl.length >= 3 && sl === cl) return true;
+  }
+
+  // 3) co-wishlist / buyer croce forte
+  if (/croce×|co-wishlist|buyer croce/i.test(reason)) return true;
+
+  // 4) cluster digger: solo se STESSO genere del pick (o deep/tech house se pick è house)
+  if (/cluster/i.test(reason)) {
+    const seedGenres = seeds.map((s) => s.genre.toLowerCase());
+    const cg = candidate.genre.toLowerCase();
+    if (seedGenres.includes(cg)) return true;
+    const seedHouse = seeds.some((s) => resolveGenre(s.genre).familySlug === "house");
+    if (
+      seedHouse &&
+      /^(house|deep house|tech house)$/i.test(candidate.genre)
+    ) {
+      return true;
+    }
+    const seedTechno = seeds.some((s) => resolveGenre(s.genre).familySlug === "techno");
+    if (
+      seedTechno &&
+      /^(techno|minimal|hard techno|melodic techno|acid)$/i.test(candidate.genre)
+    ) {
+      return true;
+    }
+    return false;
+  }
+
+  // 5) Discogs/iTunes già filtrati a artist/label — ok se reason lo dice
+  if (/Discogs stesso|iTunes discografia|stesso artista|stessa label/i.test(reason)) {
+    return true;
+  }
+
   return false;
 }
 
@@ -142,6 +195,7 @@ function bumpHit(
 ) {
   if (isJunk(track.artist, track.title)) return;
   if (seeds.length && isSeedOrOwned(track, seeds, ownedKeys)) return;
+  if (seeds.length && !isCorrelated(seeds, track, reason)) return;
   const key = itemKey(track.artist, track.title);
   const prev = map.get(key);
   if (!prev) {
@@ -329,20 +383,22 @@ export async function runDiglistSocial(
     }
   }
 
-  // Affinity cluster Diglist (catalogo curato) — croce tra pick
+  // Affinity cluster — solo croce ≥2 (altrimenti troppo “topolino”)
   const affinity = rankByAffinity(seeds, [], mode === "long" ? 24 : 14);
   affinity.forEach((h) => {
+    if (h.croce < 2) return;
     bump(
       h.track,
       90 + h.croce * 40 + h.score / 5,
-      h.croce >= 2 ? `cluster croce×${h.croce}` : "cluster digger",
-      Math.max(1, h.croce),
+      `cluster croce×${h.croce}`,
+      h.croce,
       h.croce,
     );
   });
 
   let ranked = Array.from(hits.values())
-    .filter((h) => h.score >= 55)
+    .filter((h) => h.score >= 70)
+    .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
   ranked = diversify(ranked, cfg.out);
