@@ -3,13 +3,14 @@ import { buildDigList, digSearchQuery, type DigMode } from "@/lib/engines/diglis
 import type { BuyerCollection } from "@/lib/engines/diglistBuyers";
 import { scoutBandcampBuyers } from "@/lib/live/bandcampScout";
 import { scoutDiscogsGraph } from "@/lib/live/discogsScout";
+import { scoutItunesArtists } from "@/lib/live/itunesArtistScout";
 import { enrichPreviews } from "@/lib/live/enrichPreview";
 import { sanitizeTrack } from "@/lib/sanitizeTrack";
 import { buyerCollectionsForSeeds } from "@/lib/wishlist";
 import type { Track } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 45;
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => ({}))) as {
@@ -17,7 +18,6 @@ export async function POST(req: Request) {
     mode?: DigMode;
   };
 
-  // Niente fallback su payload raw: se sanitize fallisce, scarta
   const seeds = (body.seeds ?? [])
     .map((t) => sanitizeTrack(t))
     .filter((t): t is Track => !!t?.id && !!t?.title)
@@ -40,41 +40,66 @@ export async function POST(req: Request) {
     realBuyers = [];
   }
 
-  // 1) Bandcamp: chi ha comprato × collezione (se CF lascia passare)
+  const hasBcUrl = seeds.some((s) =>
+    s.offers?.some(
+      (o) =>
+        o.storeId === "bandcamp" &&
+        typeof o.url === "string" &&
+        /bandcamp\.com\//i.test(o.url) &&
+        !/\/search\?/i.test(o.url),
+    ),
+  );
+
   let bcNote = "";
   let bcTracks: Track[] = [];
-  try {
-    const bc = await scoutBandcampBuyers(seeds, mode === "long" ? 24 : 12);
-    bcTracks = bc.tracks;
-    bcNote = bc.note;
-  } catch {
-    bcNote = "Bandcamp scout error";
+  if (hasBcUrl) {
+    try {
+      const bc = await scoutBandcampBuyers(seeds, mode === "long" ? 16 : 8);
+      bcTracks = bc.tracks;
+      bcNote = bc.note;
+    } catch {
+      bcNote = "Bandcamp scout error";
+    }
+  } else {
+    bcNote = "Bandcamp: nessun URL diretto sui pick";
   }
 
-  // 2) Discogs: dove è uscito → label roster → artista → stile (accurato)
   let discogsTracks: Track[] = [];
   let discogsNote = "";
   try {
-    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 28 : 14);
+    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 20 : 12);
     discogsTracks = dg.tracks;
     discogsNote = dg.note;
   } catch {
     discogsNote = "Discogs scout error";
   }
 
-  const scoutTracks = [...bcTracks, ...discogsTracks];
-  const result = buildDigList(seeds, [], mode, realBuyers, scoutTracks);
+  let itunesTracks: Track[] = [];
+  let itunesNote = "";
+  try {
+    const it = await scoutItunesArtists(seeds, mode === "long" ? 16 : 10);
+    itunesTracks = it.tracks;
+    itunesNote = it.note;
+  } catch {
+    itunesNote = "iTunes scout error";
+  }
+
+  const scoutTracks = [...bcTracks, ...discogsTracks, ...itunesTracks];
+  const result = buildDigList(seeds, itunesTracks, mode, realBuyers, scoutTracks);
   const tracks = await enrichPreviews(result.tracks, mode === "long" ? 8 : 5);
 
   return NextResponse.json(
     {
       mode: result.mode,
       tracks,
-      note: [result.note, discogsNote, bcNote].filter(Boolean).join(" · "),
+      note: [result.note, discogsNote, itunesNote, bcNote]
+        .filter(Boolean)
+        .join(" · "),
       method: result.method,
       scout: {
         bandcamp: bcTracks.length,
         discogs: discogsTracks.length,
+        itunes: itunesTracks.length,
         web: result.web.length,
       },
       croci: result.croci.slice(0, 8).map((c) => ({

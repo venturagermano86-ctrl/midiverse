@@ -14,17 +14,11 @@ import type { Track } from "../types";
 
 /** Cluster di gusto: tracce che "si crociano" come fan Bandcamp. */
 export const TASTE_CLUSTERS: string[][] = [
-  // deep / late night diggers (Bandcamp croci)
-  [
-    "hold-the-mark",
-    "spin-the-gate",
-    "harbour-bell",
-    "river-cut",
-    "soft-clamp",
-    "late-ferry",
-    "red-room-loop",
-  ],
-  // peak / warehouse
+  // Germano / Closed Edition house diggers (croce forte)
+  ["hold-the-mark", "spin-the-gate", "river-cut", "open-roof"],
+  // deep / late night
+  ["harbour-bell", "soft-clamp", "late-ferry", "red-room-loop", "salt-line"],
+  // peak / warehouse techno-leaning
   [
     "glass-corridor",
     "chrome-prayer",
@@ -36,7 +30,7 @@ export const TASTE_CLUSTERS: string[][] = [
     "beatport-exclusive",
   ],
   // disco / nu / warm
-  ["salt-line", "open-roof", "velvet-runway", "static-kiss", "only-on-bandcamp"],
+  ["velvet-runway", "static-kiss", "only-on-bandcamp"],
   // electro / leftfield
   ["low-voltage", "midnight-relay"],
 ];
