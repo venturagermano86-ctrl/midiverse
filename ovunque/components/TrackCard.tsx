@@ -49,7 +49,11 @@ export function TrackCard({ track, index = 0 }: Props) {
             </div>
           ) : null}
           <div className="absolute bottom-2 right-2 z-10" onClick={(e) => e.preventDefault()}>
-            <QuickPlay src={track.previewUrl} title={track.title} />
+            <QuickPlay
+              src={track.previewUrl}
+              title={track.title}
+              artist={track.artist}
+            />
           </div>
         </div>
         <div className="mt-3 space-y-1">

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { buildDigList, digSearchQuery, type DigMode } from "@/lib/engines/diglist";
+import { enrichPreviews } from "@/lib/live/enrichPreview";
 import { itunesSearch } from "@/lib/live/itunes";
+import { sanitizeTrack } from "@/lib/sanitizeTrack";
 import type { Track } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +12,10 @@ export async function POST(req: Request) {
     seeds?: Track[];
     mode?: DigMode;
   };
-  const seeds = (body.seeds ?? []).filter((t) => t?.id && t?.title).slice(0, 6);
+  const seeds = (body.seeds ?? [])
+    .map((t) => sanitizeTrack(t) ?? t)
+    .filter((t) => t?.id && t?.title)
+    .slice(0, 6) as Track[];
   const mode: DigMode = body.mode === "long" ? "long" : "short";
 
   if (seeds.length === 0) {
@@ -25,9 +30,13 @@ export async function POST(req: Request) {
   }
 
   const result = buildDigList(seeds, live, mode);
+  // Consigliati curated spesso senza preview → attacca iTunes
+  const tracks = await enrichPreviews(result.tracks, mode === "long" ? 6 : 4);
+
   return NextResponse.json(
     {
       ...result,
+      tracks,
       seeds: seeds.map((t) => ({ id: t.id, title: t.title, artist: t.artist })),
     },
     { headers: { "cache-control": "private, no-store" } },

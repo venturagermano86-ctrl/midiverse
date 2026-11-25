@@ -136,7 +136,11 @@ export function PickShelf({ tracks, openInNewTab = true }: Props) {
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
-                    <QuickPlay src={track.previewUrl} title={track.title} />
+                    <QuickPlay
+                      src={track.previewUrl}
+                      title={track.title}
+                      artist={track.artist}
+                    />
                   </div>
                 </div>
                 <p className="mt-2.5 truncate font-display text-sm font-bold text-mist">

@@ -65,7 +65,11 @@ export function RecordShelf({ tracks, showPrice = true }: Props) {
                 <HeartWish track={track} />
               </div>
               <div className="absolute bottom-2 right-2 z-10 drop-shadow-md">
-                <QuickPlay src={track.previewUrl} title={track.title} />
+                <QuickPlay
+                  src={track.previewUrl}
+                  title={track.title}
+                  artist={track.artist}
+                />
               </div>
             </div>
             <Link href={`/traccia/${track.id}`} className="block">
