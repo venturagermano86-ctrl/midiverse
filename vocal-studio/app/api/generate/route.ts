@@ -5,6 +5,7 @@ import path from "path";
 import os from "os";
 import { getGenre, getVariation } from "@/lib/genres";
 import { clampBpm, pitchNudgeForKey } from "@/lib/keys";
+import { getSinger } from "@/lib/singers";
 
 export const runtime = "nodejs";
 export const maxDuration = 180;
@@ -112,6 +113,8 @@ export async function POST(req: NextRequest) {
     const sourceUrl = String(form.get("sourceUrl") || "").trim();
     const bpmRaw = form.get("bpm");
     const keyId = String(form.get("key") || "Am").trim() || "Am";
+    const singerId = String(form.get("singerId") || "house-soul-f").trim();
+    const singer = getSinger(singerId);
     const userBpm =
       bpmRaw !== null && String(bpmRaw).trim() !== ""
         ? clampBpm(Number(bpmRaw))
@@ -186,16 +189,25 @@ export async function POST(req: NextRequest) {
         ? clampBpm(analysisFromUrl.bpm as number)
         : genreMid);
 
-    const baseRate = (variation?.rate ?? -18) + keyNudge.rateNudge;
-    const basePitch = (variation?.pitchHz ?? 0) + keyNudge.pitchHz;
+    // Singer preset drives voice; genre variation still supplies phrases when not reference
+    const baseRate =
+      (mode === "reference"
+        ? Number(analysisFromUrl?.rate ?? singer.rate)
+        : singer.rate) + keyNudge.rateNudge;
+    const basePitch =
+      (mode === "reference"
+        ? Number(analysisFromUrl?.pitchHz ?? singer.pitchHz)
+        : singer.pitchHz) + keyNudge.pitchHz;
 
     if (analysisFromUrl) {
       analysisFromUrl = {
         ...analysisFromUrl,
         key: keyId,
         ...(userBpm ? { bpm: userBpm } : {}),
-        pitchHz: Number(analysisFromUrl.pitchHz ?? 0) + keyNudge.pitchHz,
-        rate: Number(analysisFromUrl.rate ?? -18) + keyNudge.rateNudge,
+        pitchHz: Number(analysisFromUrl.pitchHz ?? singer.pitchHz) + keyNudge.pitchHz,
+        rate: Number(analysisFromUrl.rate ?? singer.rate) + keyNudge.rateNudge,
+        dsp: analysisFromUrl.dsp || singer.dsp,
+        singerId: singer.id,
       };
     }
 
@@ -205,11 +217,17 @@ export async function POST(req: NextRequest) {
       bpm: defaultBpm,
       userBpm: userBpm ?? undefined,
       key: keyId,
-      voice: variation?.voice || "jenny",
+      voice: singer.edgeVoice || variation?.voice || "jenny",
+      wetVoice: variation?.voice || singer.edgeVoice,
       rate: baseRate,
       pitchHz: basePitch,
+      dsp: singer.dsp,
       dry: variation?.phrases.dry || ["hold the mark"],
       wet: variation?.phrases.wet || ["don't let go"],
+      elevenVoiceId: singer.elevenVoiceId,
+      elevenWetVoiceId: singer.elevenVoiceId,
+      singerLabel: singer.label,
+      singerId: singer.id,
       trackPath,
       analysis: analysisFromUrl || undefined,
     };

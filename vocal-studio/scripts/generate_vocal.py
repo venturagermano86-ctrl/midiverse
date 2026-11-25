@@ -76,11 +76,66 @@ VOICE_MAP = {
 }
 
 
-async def tts_phrase(text: str, voice: str, rate: int, pitch_hz: int, dest: Path) -> None:
+def elevenlabs_available() -> bool:
+    return bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+
+
+def tts_elevenlabs(text: str, voice_id: str, dest: Path) -> bool:
+    """High-quality singer-style TTS via ElevenLabs. Returns False on failure."""
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not api_key or not voice_id:
+        return False
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    body = _json.dumps(
+        {
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": {
+                "stability": 0.35,
+                "similarity_boost": 0.8,
+                "style": 0.55,
+                "use_speaker_boost": True,
+            },
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "xi-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            dest.write_bytes(resp.read())
+        return dest.exists() and dest.stat().st_size > 500
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+        return False
+
+
+async def tts_phrase(
+    text: str,
+    voice: str,
+    rate: int,
+    pitch_hz: int,
+    dest: Path,
+    *,
+    eleven_voice_id: str = "",
+) -> None:
+    # Prefer ElevenLabs singer voices when the secret is set
+    if eleven_voice_id and tts_elevenlabs(text, eleven_voice_id, dest):
+        return
+
     import edge_tts
 
     pitch = f"{pitch_hz:+d}Hz"
-    # Slightly slower = more "sung" for elongated phrases
     communicate = edge_tts.Communicate(text, voice, rate=f"{rate}%", pitch=pitch)
     await communicate.save(str(dest))
 
@@ -195,8 +250,12 @@ def main() -> int:
     dry_phrases = cfg.get("dry", ["hold the mark"])
     wet_phrases = cfg.get("wet", ["don't let go"])
     dsp = str(cfg.get("dsp") or "punch")
+    eleven_dry = str(cfg.get("elevenVoiceId") or "")
+    eleven_wet = str(cfg.get("elevenWetVoiceId") or eleven_dry)
+    singer_label = str(cfg.get("singerLabel") or "")
     track_path = cfg.get("trackPath") or ""
     analysis_meta = cfg.get("analysis") or {}
+    engine = "elevenlabs" if elevenlabs_available() and eleven_dry else "edge-tts"
 
     user_bpm = cfg.get("userBpm")
     key_id = str(cfg.get("key") or "Am")
@@ -243,13 +302,29 @@ def main() -> int:
             files = []
             for i, phrase in enumerate(dry_phrases):
                 mp3 = td_path / f"dry{i}.mp3"
-                tasks.append(tts_phrase(phrase, voice, rate, pitch_hz, mp3))
+                tasks.append(
+                    tts_phrase(
+                        phrase,
+                        voice,
+                        rate,
+                        pitch_hz,
+                        mp3,
+                        eleven_voice_id=eleven_dry,
+                    )
+                )
                 files.append(("dry", i, mp3))
             for i, phrase in enumerate(wet_phrases):
                 mp3 = td_path / f"wet{i}.mp3"
                 # Answer voice: different neural + slightly lower / wetter
                 tasks.append(
-                    tts_phrase(phrase, wet_voice, rate - 2, pitch_hz - 3, mp3)
+                    tts_phrase(
+                        phrase,
+                        wet_voice,
+                        rate - 2,
+                        pitch_hz - 3,
+                        mp3,
+                        eleven_voice_id=eleven_wet or eleven_dry,
+                    )
                 )
                 files.append(("wet", i, mp3))
             await asyncio.gather(*tasks)
@@ -350,12 +425,23 @@ def main() -> int:
             analysis_meta = {
                 "bpm": round(float(bpm), 1),
                 "key": key_id,
-                "label": "Custom",
+                "label": singer_label or "Custom",
                 "note": f"BPM {round(float(bpm))} · chiave {key_id}",
             }
         else:
             analysis_meta.setdefault("bpm", round(float(bpm), 1))
             analysis_meta["key"] = key_id
+            if singer_label:
+                analysis_meta["label"] = singer_label
+        analysis_meta["engine"] = engine
+        if engine == "elevenlabs":
+            analysis_meta["note"] = (
+                "Motore cantante AI (ElevenLabs) — voci con licenza, non cloni di star."
+            )
+        elif not analysis_meta.get("note"):
+            analysis_meta["note"] = (
+                "Demo edge-tts. Aggiungi ELEVENLABS_API_KEY per voci cantante reali."
+            )
         payload["analysis"] = analysis_meta
         print(json.dumps(payload))
     return 0

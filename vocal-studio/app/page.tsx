@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { GENRES } from "@/lib/genres";
 import { BPM_PRESETS, KEYS } from "@/lib/keys";
+import { SINGERS } from "@/lib/singers";
 
 const LENGTHS = [
   { sec: 16, label: "16s" },
@@ -22,6 +23,7 @@ type Analysis = {
   dry?: string[];
   wet?: string[];
   note?: string;
+  engine?: string;
   sourceTitle?: string;
   sourceAuthor?: string;
   sourceMode?: string;
@@ -43,6 +45,7 @@ export default function VocalStudioPage() {
   const [lengthSec, setLengthSec] = useState(32);
   const [bpm, setBpm] = useState(124);
   const [keyId, setKeyId] = useState("Am");
+  const [singerId, setSingerId] = useState(SINGERS[0].id);
   const [track, setTrack] = useState<File | null>(null);
   const [sourceUrl, setSourceUrl] = useState("");
   const [busy, setBusy] = useState(false);
@@ -79,6 +82,7 @@ export default function VocalStudioPage() {
       body.set("mode", mode);
       body.set("bpm", String(bpm));
       body.set("key", keyId);
+      body.set("singerId", singerId);
       if (track) body.set("track", track);
       if (url) body.set("sourceUrl", url);
 
@@ -122,15 +126,42 @@ export default function VocalStudioPage() {
           Vocal Studio
         </h1>
         <p className="mt-4 max-w-lg text-[1.02rem] leading-relaxed text-mute">
-          Ti piace un vocal? Incolla il link YouTube — ti diamo un cantato{" "}
-          <em className="text-ink not-italic">simile di mood</em>, originale e
-          usabile. Oppure carica il file.
+          Genera vocal da{" "}
+          <em className="text-ink not-italic">cantanti AI</em> (voci con
+          licenza) — stile house/soul/minimal. Non cloniamo star famose senza
+          diritti: i reel che vedi usano API a pagamento; qui colleghiamo lo
+          stesso tipo di motore.
         </p>
       </header>
 
       <section className="flex flex-col gap-8">
         <div>
-          <h2 className="mb-3 text-sm font-medium text-mute">1 · Cosa vuoi fare</h2>
+          <h2 className="mb-3 text-sm font-medium text-mute">1 · Cantante AI</h2>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {SINGERS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => setSingerId(s.id)}
+                className={`rounded-xl border px-4 py-3 text-left transition ${
+                  singerId === s.id
+                    ? "border-accent/50 bg-accent/10"
+                    : "border-surface-border bg-surface hover:border-accent/30"
+                }`}
+              >
+                <div className="font-semibold">{s.label}</div>
+                <p className="mt-1 text-[0.75rem] text-mute">{s.blurb}</p>
+              </button>
+            ))}
+          </div>
+          <p className="mt-2 text-[0.75rem] text-mute">
+            Con ElevenLabs attivo = voce cantante reale. Senza chiave = demo
+            parlata (edge-tts).
+          </p>
+        </div>
+
+        <div>
+          <h2 className="mb-3 text-sm font-medium text-mute">2 · Cosa vuoi fare</h2>
           <div className="grid gap-2 sm:grid-cols-3">
             {(
               [
@@ -173,8 +204,8 @@ export default function VocalStudioPage() {
             <div>
               <h2 className="mb-3 text-sm font-medium text-mute">
                 {mode === "reference"
-                  ? "2 · Link YouTube (il più facile)"
-                  : "2 · Link oppure file"}
+                  ? "3 · Link YouTube (il più facile)"
+                  : "3 · Link oppure file"}
               </h2>
               <input
                 type="url"
@@ -221,7 +252,7 @@ export default function VocalStudioPage() {
           <>
             <div>
               <h2 className="mb-3 text-sm font-medium text-mute">
-                {needsSource ? "3" : "2"} · Genere
+                {needsSource ? "4" : "3"} · Genere
               </h2>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 {GENRES.map((g) => {
@@ -249,7 +280,7 @@ export default function VocalStudioPage() {
 
             <div>
               <h2 className="mb-3 text-sm font-medium text-mute">
-                {needsSource ? "4" : "3"} · Variazione · {genre.label}
+                {needsSource ? "5" : "4"} · Variazione · {genre.label}
               </h2>
               <div className="flex flex-col gap-2">
                 {genre.variations.map((v) => {
@@ -282,7 +313,7 @@ export default function VocalStudioPage() {
 
         <div>
           <h2 className="mb-3 text-sm font-medium text-mute">
-            {mode === "reference" ? "3" : needsSource ? "5" : "4"} · BPM
+            {mode === "reference" ? "4" : needsSource ? "6" : "5"} · BPM
           </h2>
           <div className="flex flex-wrap items-center gap-2">
             {BPM_PRESETS.map((p) => (
@@ -315,7 +346,7 @@ export default function VocalStudioPage() {
 
         <div>
           <h2 className="mb-3 text-sm font-medium text-mute">
-            {mode === "reference" ? "4" : needsSource ? "6" : "5"} · Chiave
+            {mode === "reference" ? "5" : needsSource ? "7" : "6"} · Chiave
           </h2>
           <div className="flex flex-wrap gap-2">
             {KEYS.map((k) => (
@@ -337,7 +368,7 @@ export default function VocalStudioPage() {
 
         <div>
           <h2 className="mb-3 text-sm font-medium text-mute">
-            {mode === "reference" ? "5" : needsSource ? "7" : "6"} · Lunghezza
+            {mode === "reference" ? "6" : needsSource ? "8" : "7"} · Lunghezza
           </h2>
           <div className="flex flex-wrap gap-2">
             {LENGTHS.map((l) => (
@@ -395,10 +426,8 @@ export default function VocalStudioPage() {
               </p>
             )}
             <p className="mt-2 text-mute">
-              Pack: <span className="text-ink">{analysis.label}</span>
-              {analysis.voice
-                ? ` · voci ${analysis.voice}${analysis.wetVoice ? ` + ${analysis.wetVoice}` : ""}`
-                : ""}
+              Cantante: <span className="text-ink">{analysis.label}</span>
+              {analysis.engine ? ` · motore ${analysis.engine}` : ""}
               {analysis.bpm ? ` · ${Math.round(analysis.bpm)} BPM` : ""}
               {analysis.key ? ` · ${analysis.key}` : ""}
             </p>
@@ -442,9 +471,9 @@ export default function VocalStudioPage() {
       </section>
 
       <footer className="mt-14 text-[0.75rem] leading-relaxed text-mute">
-        Link YouTube: analizziamo il mood (audio se scaricabile, altrimenti
-        titolo/artista) e generiamo un vocal nuovo. Non cloniamo voce né testo.
-        Demo TTS — motore da studio collegabile dopo.
+        Cantanti AI con licenza (ElevenLabs) quando la chiave è attiva; altrimenti
+        demo. Non cloniamo cantanti famosi senza diritti — stesso tipo di motore
+        dei reel, ma voci originali usabili in produzione.
       </footer>
     </main>
   );
