@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
+import { QuickPlay } from "@/components/QuickPlay";
 import { StationButton } from "@/components/StationButton";
 import { digitalOffers, formatOfferPrice, vinylOffers } from "@/lib/catalog";
 import type { Track } from "@/lib/types";
@@ -24,7 +27,6 @@ function Centrino({ track }: { track: Track }) {
     );
   }
 
-  // Centrino vinile sintetico (label al centro) quando non c’è artwork
   return (
     <div
       className="relative aspect-square w-full overflow-hidden"
@@ -57,10 +59,16 @@ export function RecordShelf({ tracks, showPrice = true }: Props) {
         const hasVinyl = vinylOffers(track.offers).length > 0;
         return (
           <li key={track.id} className="group min-w-0">
-            <Link href={`/traccia/${track.id}`} className="block">
-              <div className="overflow-hidden border border-line bg-panel transition group-hover:border-signal/45">
+            <div className="relative overflow-hidden border border-line bg-panel transition group-hover:border-signal/45">
+              <Link href={`/traccia/${track.id}`} className="block">
                 <Centrino track={track} />
+              </Link>
+              {/* Play sulla cover — non naviga via */}
+              <div className="absolute bottom-2 right-2 z-10 drop-shadow-md">
+                <QuickPlay src={track.previewUrl} title={track.title} />
               </div>
+            </div>
+            <Link href={`/traccia/${track.id}`} className="block">
               <p className="mt-2.5 truncate font-display text-sm font-bold text-mist group-hover:text-signal">
                 {track.title}
               </p>

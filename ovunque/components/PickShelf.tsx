@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CoverArt } from "@/components/CoverArt";
+import { QuickPlay } from "@/components/QuickPlay";
 import type { Track } from "@/lib/types";
 
 const MAX_PICKS = 6;
@@ -118,10 +119,17 @@ export function PickShelf({ tracks, openInNewTab = true }: Props) {
                 >
                   <Centrino track={track} />
                   {on ? (
-                    <span className="absolute right-2 top-2 inline-grid h-7 w-7 place-items-center rounded-full bg-signal font-display text-sm font-black text-ink">
+                    <span className="absolute right-2 top-2 z-10 inline-grid h-7 w-7 place-items-center rounded-full bg-signal font-display text-sm font-black text-ink">
                       {idx + 1}
                     </span>
                   ) : null}
+                  <div
+                    className="absolute bottom-2 left-2 z-10"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <QuickPlay src={track.previewUrl} title={track.title} />
+                  </div>
                 </div>
                 <p className="mt-2.5 truncate font-display text-sm font-bold text-mist">
                   {track.title}
