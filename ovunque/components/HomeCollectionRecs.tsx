@@ -13,8 +13,8 @@ export function HomeCollectionRecs() {
 
   return (
     <TrackRail
-      title="Perché hai queste in collezione"
-      subtitle="Stile Diggleist: scegli i dischi, OVUNQUE ti porta i simili"
+      title="Perché hai queste in wishlist"
+      subtitle="Dig List: scegli i dischi, trovi i simili e confronti i prezzi"
       tracks={hits.map((h) => h.track)}
     />
   );

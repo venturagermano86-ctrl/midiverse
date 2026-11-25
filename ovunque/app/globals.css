@@ -3,54 +3,79 @@
 @tailwind utilities;
 
 :root {
-  /* Beatport-ish store black + chart lime; Bandcamp cyan per artist */
-  --ink: #050505;
-  --panel: #0e0e0e;
-  --row: #121212;
-  --mist: #f2f2f2;
-  --muted: #8a8a8a;
-  --signal: #a8ff3e;
+  /* Dig List / MIDIVRS palette — private expansion sandbox */
+  --bg: #0c0d0f;
+  --surface: #14171c;
+  --surface-2: #1a1e24;
+  --line: #252a32;
+  --ink: #e8eaed;
+  --ink-soft: #a3a8b0;
+  --muted: #7d828a;
+  --accent: #5fd4a8;
+  --accent-hi: #6ee7b7;
+  --accent-bg: rgba(95, 212, 168, 0.12);
+  --accent-ink: #0c0d0f;
+  --warm: #f0a483;
+  --warm-bg: rgba(240, 164, 131, 0.12);
   --bandcamp: #1da0c3;
-  --ember: #ff5a36;
-  --line: #222;
-  --font-display: "Syne", system-ui, sans-serif;
-  --font-body: "Plus Jakarta Sans", system-ui, sans-serif;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --font: "Archivo", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+
+  /* Tailwind aliases used across components */
+  --ink-tw: #0c0d0f;
+  --panel: #14171c;
+  --row: #1a1e24;
+  --mist: #e8eaed;
+  --signal: #5fd4a8;
+  --ember: #f0a483;
+  --font-display: var(--font);
+  --font-body: var(--font);
 }
 
 html {
   scroll-behavior: smooth;
+  background: var(--bg);
+  color-scheme: dark;
 }
 
 body {
   min-height: 100vh;
-  color: var(--mist);
-  background: var(--ink);
-  font-family: var(--font-body), system-ui, sans-serif;
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(900px 420px at 80% -12%, rgba(95, 212, 168, 0.07), transparent 65%),
+    var(--bg);
+  background-attachment: fixed;
+  font-family: var(--font);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 ::selection {
-  background: color-mix(in srgb, var(--signal) 50%, transparent);
-  color: #000;
+  background: var(--accent);
+  color: var(--accent-ink);
 }
 
 .scrollbar-thin {
   scrollbar-width: thin;
-  scrollbar-color: rgba(168, 255, 62, 0.25) transparent;
+  scrollbar-color: rgba(95, 212, 168, 0.35) transparent;
 }
 
 .atmosphere {
   background:
-    radial-gradient(ellipse 70% 40% at 80% -5%, rgba(168, 255, 62, 0.12), transparent 50%),
-    radial-gradient(ellipse 50% 35% at 0% 30%, rgba(29, 160, 195, 0.1), transparent 45%),
-    linear-gradient(180deg, #050505 0%, #0a0a0a 50%, #050505 100%);
+    radial-gradient(900px 420px at 80% -12%, rgba(95, 212, 168, 0.07), transparent 65%),
+    var(--bg);
 }
 
 .hero-plane {
   background:
-    linear-gradient(100deg, rgba(5, 5, 5, 0.15) 0%, rgba(5, 5, 5, 0.85) 58%, #050505 100%),
-    radial-gradient(ellipse 70% 80% at 75% 45%, rgba(168, 255, 62, 0.18), transparent 55%),
-    radial-gradient(ellipse 40% 50% at 30% 80%, rgba(29, 160, 195, 0.15), transparent 50%),
-    #0a0a0a;
+    linear-gradient(100deg, rgba(12, 13, 15, 0.2) 0%, rgba(12, 13, 15, 0.88) 58%, #0c0d0f 100%),
+    radial-gradient(ellipse 70% 80% at 75% 45%, rgba(95, 212, 168, 0.14), transparent 55%),
+    radial-gradient(ellipse 40% 50% at 30% 80%, rgba(26, 30, 36, 0.9), transparent 50%),
+    #0c0d0f;
 }
 
 .waveform {
@@ -58,13 +83,22 @@ body {
     90deg,
     transparent 0,
     transparent 2px,
-    rgba(168, 255, 62, 0.15) 2px,
-    rgba(168, 255, 62, 0.15) 3px
+    rgba(95, 212, 168, 0.18) 2px,
+    rgba(95, 212, 168, 0.18) 3px
   );
   mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 40'%3E%3Cpath fill='white' d='M0 20 Q10 4 20 20 T40 20 T60 20 T80 20 T100 20 T120 20 T140 20 T160 20 T180 20 T200 20 T220 20 T240 20 T260 20 T280 20 T300 20 T320 20 T340 20 T360 20 T380 20 T400 20 V40 H0Z'/%3E%3C/svg%3E");
   mask-size: 100% 100%;
 }
 
 .chart-row:hover {
-  background: #161616;
+  background: #1a1e24;
+}
+
+.brand-dot {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0c0d0f 0 2px, #5fd4a8 2.5px 5px, #1f2a26 5.5px 100%);
+  box-shadow: 0 0 0 1px #5fd4a8;
+  flex-shrink: 0;
 }

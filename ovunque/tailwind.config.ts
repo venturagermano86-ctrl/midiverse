@@ -5,19 +5,25 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: "#050505",
-        panel: "#0e0e0e",
-        row: "#121212",
-        mist: "#f2f2f2",
-        muted: "#8a8a8a",
-        signal: "#a8ff3e",
+        ink: "#0c0d0f",
+        panel: "#14171c",
+        row: "#1a1e24",
+        mist: "#e8eaed",
+        muted: "#7d828a",
+        soft: "#a3a8b0",
+        signal: "#5fd4a8",
+        "signal-hi": "#6ee7b7",
         bandcamp: "#1da0c3",
-        ember: "#ff5a36",
-        line: "#222222",
+        ember: "#f0a483",
+        line: "#252a32",
+      },
+      borderRadius: {
+        dig: "10px",
+        "dig-lg": "16px",
       },
       fontFamily: {
-        display: ["Syne", "system-ui", "sans-serif"],
-        body: ["Plus Jakarta Sans", "system-ui", "sans-serif"],
+        display: ["Archivo", "system-ui", "sans-serif"],
+        body: ["Archivo", "system-ui", "sans-serif"],
       },
       keyframes: {
         rise: {
@@ -30,7 +36,7 @@ const config: Config = {
         },
       },
       animation: {
-        rise: "rise 0.65s ease-out both",
+        rise: "rise 0.65s cubic-bezier(0.2, 0.7, 0.2, 1) both",
         drift: "drift 20s ease-in-out infinite",
       },
     },

@@ -1,6 +1,5 @@
 import type { StoreId, StoreMeta } from "./types";
 
-/** Registro portali — store DJ reali collegati via deep-link / prezzo live. */
 export const STORES: Record<StoreId, StoreMeta> = {
   beatport: {
     id: "beatport",
@@ -14,7 +13,7 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "Bandcamp",
     short: "BC",
     kind: "hybrid",
-    blurb: "Artist-direct, FLAC / name-your-price",
+    blurb: "Artist-direct, FLAC / vinyl",
   },
   traxsource: {
     id: "traxsource",
@@ -28,7 +27,14 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "Juno Download",
     short: "JN",
     kind: "shop",
-    blurb: "Catalogo ampio, MP3 / WAV",
+    blurb: "Digital MP3 / WAV",
+  },
+  juno_vinyl: {
+    id: "juno_vinyl",
+    name: "Juno Records",
+    short: "JV",
+    kind: "shop",
+    blurb: "Vinyl online",
   },
   whatpeopleplay: {
     id: "whatpeopleplay",
@@ -42,7 +48,7 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "Boomkat",
     short: "BK",
     kind: "shop",
-    blurb: "Experimental / leftfield",
+    blurb: "Experimental / vinyl + digi",
   },
   bleep: {
     id: "bleep",
@@ -63,7 +69,7 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "Hardwax",
     short: "HW",
     kind: "shop",
-    blurb: "Berlin techno / dub",
+    blurb: "Berlin techno / vinyl",
   },
   decks: {
     id: "decks",
@@ -72,26 +78,40 @@ export const STORES: Record<StoreId, StoreMeta> = {
     kind: "shop",
     blurb: "Vinyl + digital EU",
   },
+  deejay: {
+    id: "deejay",
+    name: "deejay.de",
+    short: "DJ",
+    kind: "shop",
+    blurb: "Vinyl shop Frankfurt",
+  },
   roughtrade: {
     id: "roughtrade",
     name: "Rough Trade",
     short: "RT",
     kind: "shop",
-    blurb: "Indie / electronic shop",
+    blurb: "Indie / vinyl shop",
   },
   discogs: {
     id: "discogs",
     name: "Discogs Marketplace",
     short: "DG",
     kind: "shop",
-    blurb: "Marketplace vinile / digi",
+    blurb: "Marketplace vinile",
+  },
+  hhv: {
+    id: "hhv",
+    name: "HHV",
+    short: "HH",
+    kind: "shop",
+    blurb: "Vinyl shop Berlin",
   },
   apple: {
     id: "apple",
     name: "Apple Music",
     short: "AM",
     kind: "shop",
-    blurb: "Download AAC — prezzo live",
+    blurb: "Download AAC",
   },
   amazon: {
     id: "amazon",
@@ -105,14 +125,14 @@ export const STORES: Record<StoreId, StoreMeta> = {
     name: "SoundCloud",
     short: "SC",
     kind: "free",
-    blurb: "Free DL se l’artista lo abilita",
+    blurb: "Solo se free download abilitato",
   },
   youtube: {
     id: "youtube",
     name: "YouTube Music",
     short: "YT",
     kind: "free",
-    blurb: "Ascolto / a volte free",
+    blurb: "Stream",
   },
   freesound: {
     id: "freesound",
@@ -124,6 +144,18 @@ export const STORES: Record<StoreId, StoreMeta> = {
 };
 
 export const STORE_ORDER: StoreId[] = Object.keys(STORES) as StoreId[];
+
+export const VINYL_STORES: StoreId[] = [
+  "deejay",
+  "decks",
+  "discogs",
+  "juno_vinyl",
+  "hardwax",
+  "boomkat",
+  "hhv",
+  "roughtrade",
+  "bandcamp",
+];
 
 export function storeName(id: string): string {
   return STORES[id as StoreId]?.name ?? id;

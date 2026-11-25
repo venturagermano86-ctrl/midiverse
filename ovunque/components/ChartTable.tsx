@@ -1,7 +1,14 @@
 import Link from "next/link";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
-import { cheapestOffer, formatPrice, hasFreeOffer } from "@/lib/catalog";
+import {
+  cheapestOffer,
+  formatOfferPrice,
+  formatPrice,
+  hasFreeOffer,
+  landedPrice,
+  vinylOffers,
+} from "@/lib/catalog";
 import { storeName } from "@/lib/stores";
 import type { Track } from "@/lib/types";
 
@@ -22,7 +29,7 @@ export function ChartTable({ tracks, showRank = true }: Props) {
             <th className="hidden px-3 py-3 font-semibold lg:table-cell">Genre</th>
             <th className="px-3 py-3 font-semibold">BPM</th>
             <th className="hidden px-3 py-3 font-semibold sm:table-cell">Key</th>
-            <th className="px-3 py-3 font-semibold text-right">Best price</th>
+            <th className="px-3 py-3 font-semibold text-right">Best / vinyl</th>
             <th className="w-24 px-3 py-3 font-semibold" />
           </tr>
         </thead>
@@ -31,6 +38,7 @@ export function ChartTable({ tracks, showRank = true }: Props) {
             const best = cheapestOffer(track);
             if (!best) return null;
             const free = hasFreeOffer(track);
+            const bestVinyl = vinylOffers(track.offers)[0];
             return (
               <tr key={track.id} className="chart-row border-b border-line/80 bg-row">
                 {showRank ? (
@@ -60,12 +68,20 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                 <td className="hidden px-3 py-2.5 text-mist/80 sm:table-cell">{track.key ?? "—"}</td>
                 <td className="px-3 py-2.5 text-right">
                   <span className={`font-semibold ${free ? "text-signal" : "text-mist"}`}>
-                    {formatPrice(best.priceEur, best.kind)}
+                    {formatOfferPrice(best)}
                   </span>
                   <span className="mt-0.5 block text-[0.65rem] text-muted">
                     {storeName(best.storeId)}
                     {track.offers.length > 1 ? ` · ${track.offers.length} stores` : ""}
                   </span>
+                  {bestVinyl ? (
+                    <span className="mt-1 block text-[0.65rem] text-signal">
+                      Vinyl {formatOfferPrice(bestVinyl)}
+                      {landedPrice(bestVinyl) != null
+                        ? ` · tot. ${formatPrice(landedPrice(bestVinyl))}`
+                        : ""}
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-3 py-2.5 text-right">
                   <AddToCollectionButton trackId={track.id} compact />

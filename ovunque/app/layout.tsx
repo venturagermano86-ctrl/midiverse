@@ -1,19 +1,17 @@
 import type { Metadata } from "next";
-import "@fontsource/syne/600.css";
-import "@fontsource/syne/700.css";
-import "@fontsource/syne/800.css";
-import "@fontsource/plus-jakarta-sans/400.css";
-import "@fontsource/plus-jakarta-sans/500.css";
-import "@fontsource/plus-jakarta-sans/600.css";
-import "@fontsource/plus-jakarta-sans/700.css";
+import "@fontsource/archivo/400.css";
+import "@fontsource/archivo/500.css";
+import "@fontsource/archivo/600.css";
+import "@fontsource/archivo/700.css";
+import "@fontsource/archivo/900.css";
 import { CollectionProvider } from "@/components/CollectionProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "OVUNQUE — charts & store like Beatport + Bandcamp",
+  title: "Dig List · Store (private)",
   description:
-    "Top charts, genres, BPM/key. Compare Beatport, Bandcamp and more — free wins, else cheapest store.",
+    "Private Dig List expansion: charts, genres, wishlist, compare Beatport / Bandcamp / Decks prices. Not the official diglist.midivrs.com.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -23,11 +21,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <CollectionProvider>
           <SiteHeader />
           {children}
-          <footer className="mt-20 border-t border-white/10 px-5 py-10 text-sm text-mist/40 md:px-10">
-            <p className="font-display font-semibold text-mist/60">OVUNQUE</p>
-            <p className="mt-2 max-w-xl text-muted">
-              Store energy: Beatport charts + Bandcamp artist buy. Confrontiamo i portali — free o
-              prezzo più basso. Catalogo demo.
+          <footer className="mt-20 border-t border-line px-5 py-10 text-sm text-muted md:px-10">
+            <p className="font-display text-sm font-black uppercase tracking-[0.14em] text-mist">
+              Dig List
+            </p>
+            <p className="mt-2 max-w-xl text-soft">
+              Sandbox privato — marketplace + wishlist + generi. Non è il sito ufficiale{" "}
+              <a
+                href="https://diglist.midivrs.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-signal hover:text-signal-hi"
+              >
+                diglist.midivrs.com
+              </a>
+              . powered by <span className="font-black tracking-wider text-signal">MIDIVRS</span>
             </p>
           </footer>
         </CollectionProvider>

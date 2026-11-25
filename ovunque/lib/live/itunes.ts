@@ -1,5 +1,5 @@
 import type { Track } from "../types";
-import { buildStoreOffers } from "./storeLinks";
+import { buildStoreOffers, sampleVinylListings } from "./storeLinks";
 
 type ItunesSong = {
   trackId?: number;
@@ -29,6 +29,7 @@ function toTrack(song: ItunesSong): Track | null {
   const offers = buildStoreOffers(song.artistName, song.trackName, {
     appleUrl: song.trackViewUrl,
     applePriceUsd: price,
+    vinylListings: sampleVinylListings(song.artistName, song.trackName, song.trackId),
   });
 
   return {
@@ -43,6 +44,7 @@ function toTrack(song: ItunesSong): Track | null {
     suggested: true,
     rails: ["live", "per-te", "novita"],
     isrc: song.isrc,
+    hasVinyl: true,
     offers,
     artworkUrl: (song.artworkUrl600 || song.artworkUrl100 || "").replace(
       "100x100bb",
@@ -110,6 +112,7 @@ export async function itunesElectronicChart(limit = 20): Promise<Track[]> {
     const offers = buildStoreOffers(artist, title, {
       appleUrl: appleUrl || undefined,
       applePriceUsd: amount,
+      vinylListings: sampleVinylListings(artist, title, Number(id) || 0),
     });
 
     tracks.push({
@@ -123,6 +126,7 @@ export async function itunesElectronicChart(limit = 20): Promise<Track[]> {
       coverHue: Number(id) % 360,
       suggested: true,
       rails: ["live", "novita"],
+      hasVinyl: true,
       offers,
       artworkUrl: art,
       source: "itunes",
