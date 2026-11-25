@@ -1,20 +1,24 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { claimPreview, releasePreview } from "@/lib/previewAudio";
 
 type Props = {
   src?: string | null;
   title?: string;
 };
 
-/** Player rapido 1-click per le chart / shelf. */
+/** Player rapido 1-click — apre uno, chiude gli altri. */
 export function QuickPlay({ src, title }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const stopRef = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     return () => {
+      stopRef.current?.();
       audioRef.current?.pause();
+      audioRef.current = null;
     };
   }, []);
 
@@ -29,50 +33,71 @@ export function QuickPlay({ src, title }: Props) {
     );
   }
 
-  async function toggle() {
+  function ensureAudio(): HTMLAudioElement {
     if (!audioRef.current) {
-      audioRef.current = new Audio(src!);
-      audioRef.current.preload = "none";
-      audioRef.current.addEventListener("ended", () => setPlaying(false));
-      audioRef.current.addEventListener("pause", () => setPlaying(false));
+      const a = new Audio(src!);
+      a.preload = "none";
+      a.addEventListener("ended", () => {
+        setPlaying(false);
+        if (stopRef.current) releasePreview(stopRef.current);
+      });
+      audioRef.current = a;
     }
+    return audioRef.current;
+  }
+
+  function stopSelf() {
     const a = audioRef.current;
-    if (playing) {
+    if (a) {
       a.pause();
-      setPlaying(false);
+      a.currentTime = 0;
+    }
+    setPlaying(false);
+    if (stopRef.current) releasePreview(stopRef.current);
+  }
+
+  async function toggle() {
+    const a = ensureAudio();
+
+    if (playing) {
+      stopSelf();
       return;
     }
-    // ferma altri player sulla pagina
-    document.querySelectorAll("audio[data-dig-quick]").forEach((el) => {
-      (el as HTMLAudioElement).pause();
-    });
+
+    const stop = () => {
+      a.pause();
+      a.currentTime = 0;
+      setPlaying(false);
+    };
+    stopRef.current = stop;
+    claimPreview(stop);
+
     try {
       await a.play();
       setPlaying(true);
     } catch {
       setPlaying(false);
+      releasePreview(stop);
     }
   }
 
   return (
-    <>
-      <audio data-dig-quick src={src} preload="none" className="hidden" />
-      <button
-        type="button"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          void toggle();
-        }}
-        aria-label={playing ? `Stop ${title ?? ""}` : `Play ${title ?? ""}`}
-        className={`inline-grid h-9 w-9 place-items-center rounded-full text-sm font-black transition ${
-          playing
-            ? "bg-signal text-ink"
-            : "border border-signal/50 text-signal hover:bg-signal hover:text-ink"
-        }`}
-      >
-        {playing ? "■" : "▶"}
-      </button>
-    </>
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        void toggle();
+      }}
+      aria-label={playing ? `Stop ${title ?? ""}` : `Play ${title ?? ""}`}
+      aria-pressed={playing}
+      className={`inline-grid h-9 w-9 place-items-center rounded-full text-sm font-black transition ${
+        playing
+          ? "bg-signal text-ink"
+          : "border border-signal/50 text-signal hover:bg-signal hover:text-ink"
+      }`}
+    >
+      {playing ? "■" : "▶"}
+    </button>
   );
 }
