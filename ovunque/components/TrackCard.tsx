@@ -1,6 +1,10 @@
+"use client";
+
 import Link from "next/link";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
+import { QuickPlay } from "@/components/QuickPlay";
+import { StationButton } from "@/components/StationButton";
 import { digitalOffers, formatOfferPrice, hasFreeOffer, vinylOffers } from "@/lib/catalog";
 import { storeName } from "@/lib/stores";
 import type { Track } from "@/lib/types";
@@ -15,7 +19,7 @@ export function TrackCard({ track, index = 0 }: Props) {
   const best = digi[0];
   if (!best && digi.length === 0) return null;
   const free = hasFreeOffer(track);
-  const hasVinyl = vinylOffers(track.offers).length > 0;
+  const bestVinyl = vinylOffers(track.offers)[0];
 
   return (
     <div
@@ -35,38 +39,31 @@ export function TrackCard({ track, index = 0 }: Props) {
               Free
             </span>
           ) : null}
+          <div className="absolute bottom-2 right-2" onClick={(e) => e.preventDefault()}>
+            <QuickPlay src={track.previewUrl} title={track.title} />
+          </div>
         </div>
         <div className="mt-3 space-y-1">
           <p className="truncate font-display text-sm font-semibold text-mist group-hover:text-signal">
             {track.title}
           </p>
           <p className="truncate text-xs text-bandcamp/90">{track.artist}</p>
-          <p className="text-[0.65rem] uppercase tracking-wider text-muted">
-            {track.genre}
-            {track.bpm ? ` · ${track.bpm}` : ""}
-          </p>
           {best ? (
             <p className="pt-1 text-xs">
               <span className="font-semibold text-signal">{formatOfferPrice(best)}</span>
-              <span className="text-muted">
-                {" "}
-                · {storeName(best.storeId)}
-                {digi.length > 1 ? ` · ${digi.length}` : ""}
-              </span>
+              <span className="text-muted"> · {storeName(best.storeId)}</span>
+            </p>
+          ) : null}
+          {bestVinyl && bestVinyl.priceEur != null ? (
+            <p className="text-[0.65rem] text-soft">
+              12&quot; {formatOfferPrice(bestVinyl)}
             </p>
           ) : null}
         </div>
       </Link>
       <div className="mt-2 flex flex-wrap gap-1.5">
+        <StationButton track={track} compact />
         <AddToCollectionButton trackId={track.id} track={track} compact />
-        {hasVinyl ? (
-          <Link
-            href={`/traccia/${track.id}?media=vinyl#buy`}
-            className="rounded-dig border border-signal/40 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-signal hover:bg-signal hover:text-ink"
-          >
-            Vinyl
-          </Link>
-        ) : null}
       </div>
     </div>
   );

@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server";
-import { itunesElectronicChart } from "@/lib/live/itunes";
+import { undergroundChart, type LaneId } from "@/lib/live/underground";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const lane = (searchParams.get("lane") || "all") as LaneId;
+  const limit = Math.min(40, Number(searchParams.get("limit") || 28));
+
   try {
-    const tracks = await itunesElectronicChart(25);
+    const { tracks, note, lane: used } = await undergroundChart(lane, limit);
     return NextResponse.json({
-      source: "itunes-electronic-top",
+      source: "underground-live",
+      lane: used,
       updatedAt: new Date().toISOString(),
       count: tracks.length,
       tracks,
-      note: "Chart live Electronic/Dance. Ogni traccia apre Beatport, Bandcamp, Traxsource, Juno e gli altri store reali.",
+      note,
     });
   } catch (err) {
     return NextResponse.json(

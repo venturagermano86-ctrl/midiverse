@@ -4,6 +4,7 @@ import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
 import { ScanPanel } from "@/components/ScanPanel";
 import { SimilarRail } from "@/components/SimilarRail";
+import { StationButton } from "@/components/StationButton";
 import { StoreOffers } from "@/components/StoreOffers";
 import { TrackCard } from "@/components/TrackCard";
 import { WaveformStrip } from "@/components/WaveformStrip";
@@ -199,6 +200,7 @@ export default async function TrackPage({ params, searchParams }: Props) {
                     Bandcamp
                   </a>
                 ) : null}
+                <StationButton track={track} />
                 <AddToCollectionButton trackId={track.id} track={track} />
               </div>
             </div>

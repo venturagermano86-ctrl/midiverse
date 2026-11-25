@@ -78,9 +78,11 @@ export default function HomePage() {
               Charts
             </p>
             <h2 className="mt-1 font-display text-2xl font-black tracking-tight text-mist md:text-3xl">
-              Top Electronic
+              Underground charts
             </h2>
-            <p className="mt-1 text-sm text-soft">Live catalog + link diretti agli store</p>
+            <p className="mt-1 text-sm text-soft">
+              House / minimal / techno — digi + 12&quot; misti stile deejay.de
+            </p>
           </div>
           <Link
             href="/charts"
