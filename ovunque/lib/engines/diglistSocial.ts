@@ -1,32 +1,38 @@
 /**
- * Motore Diglist «a croce» (Short / Long / Station) — 11 passi:
- * 1 profilo (già tuoi)  2 following  3 seed  4 supporters
- * 5 croce persone  6 loro collezioni  7 hop Long  8 score
- * 9 catalogo label  10 audio (opzionale)  11 diversità + generi filtri
+ * Diglist a croce — Short / Long / Station
  *
- * Genere NON decide l'ingresso — solo filtri finali.
- * Bandcamp live se raggiungibile; altrimenti stesso schema su wishlist community + catalogo.
+ * Passi Diglist:
+ * 1–2 profilo BC (già tuoi + following) se username + API ok
+ * 3 seed (≤6)
+ * 4–8 buyers × collezioni + score
+ * 9 catalogo label/artista REALE (Discogs) — non dump genere
+ * 10 audio off (nota)
+ * 11 diversità; generi solo filtri
+ *
+ * Se Bandcamp è Cloudflare: croce su wishlist community + grafo Discogs
+ * (stesso artista / stessa label reale dei pick). Niente collector finti a caso.
  */
 
 import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
 import type { Track } from "../types";
+import { rankByAffinity } from "./affinity";
 import {
   loadBandcampProfile,
   loadFanLibrary,
   type BcItem,
   type BcProfile,
 } from "../live/bandcampDiglist";
-import { buyerCollectionsForSeeds } from "../wishlist";
+import { scoutDiscogsGraph } from "../live/discogsScout";
+import { scoutItunesArtists } from "../live/itunesArtistScout";
+import { buyerCollectionsForSeeds, coWishlistedWithSeeds } from "../wishlist";
 
 export type DigSocialMode = "short" | "long" | "station";
 
 export type DigSocialOptions = {
   mode: DigSocialMode;
   seeds: Track[];
-  /** username Bandcamp pubblico (senza @) */
   bandcampUser?: string;
-  /** dischi già tuoi (wishlist app) se non c'è BC */
   ownedLocal?: Track[];
   audioCompare?: boolean;
 };
@@ -46,17 +52,13 @@ export type DigSocialResult = {
   method: string;
   bandcampLive: boolean;
   audioActive: boolean;
-  stats: {
-    owned: number;
-    buyersUsed: number;
-    candidates: number;
-  };
+  stats: { owned: number; buyersUsed: number; candidates: number };
 };
 
 const LIMITS = {
-  short: { buyers: 16, supporterPages: 3, out: 30, fanDepthMin: 80, fanDepthMax: 180 },
-  long: { buyers: 56, supporterPages: 6, out: 60, fanDepthMin: 120, fanDepthMax: 360 },
-  station: { buyers: 16, supporterPages: 3, out: 24, fanDepthMin: 80, fanDepthMax: 160 },
+  short: { buyers: 16, out: 30 },
+  long: { buyers: 56, out: 60 },
+  station: { buyers: 16, out: 24 },
 } as const;
 
 function itemKey(artist: string, title: string): string {
@@ -77,35 +79,12 @@ function trackToItem(t: Track, purchased: boolean): BcItem {
   };
 }
 
-function itemToTrack(it: BcItem, genreHint = "Electronic"): Track {
-  const id = `dig-${it.key.replace(/[^a-z0-9]+/gi, "-").slice(0, 80)}`;
-  const q = encodeURIComponent(`${it.artist} ${it.title}`);
-  return {
-    id,
-    title: it.title,
-    artist: it.artist,
-    label: it.label || "—",
-    genre: resolveGenre(genreHint).name,
-    year: new Date().getFullYear(),
-    mood: "club",
-    coverHue: (it.itemId * 17 || id.length * 13) % 360,
-    suggested: true,
-    rails: ["per-te"],
-    offers: [
-      {
-        storeId: "bandcamp",
-        kind: "paid",
-        priceEur: null,
-        priceFrom: true,
-        currency: "EUR",
-        format: "FLAC / MP3",
-        url: it.url || `https://bandcamp.com/search?q=${q}`,
-        media: "digital",
-      },
-    ],
-    artworkUrl: it.artworkUrl,
-    source: "live",
-  };
+function isJunk(artist: string, title: string): boolean {
+  const s = `${artist} ${title}`;
+  const latin = (s.match(/[A-Za-z0-9]/g) || []).length;
+  if (latin < 4) return true;
+  if (/пиздец|какашк/i.test(s)) return true;
+  return false;
 }
 
 function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
@@ -113,17 +92,15 @@ function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
   const perLabel = new Map<string, number>();
   const seen = new Set<string>();
   const out: DigSocialHit[] = [];
-
   for (const h of hits) {
     const key = itemKey(h.track.artist, h.track.title);
-    if (seen.has(key) || seen.has(h.track.id)) continue;
+    if (seen.has(key)) continue;
     const a = h.track.artist.toLowerCase();
     const l = (h.track.label || "").toLowerCase();
     if ((perArtist.get(a) ?? 0) >= 3) continue;
     if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 3) continue;
     out.push(h);
     seen.add(key);
-    seen.add(h.track.id);
     perArtist.set(a, (perArtist.get(a) ?? 0) + 1);
     if (l) perLabel.set(l, (perLabel.get(l) ?? 0) + 1);
     if (out.length >= limit) break;
@@ -131,139 +108,59 @@ function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
   return out;
 }
 
-/** Catalogo/community proxy collectors (stesso schema Diglist quando BC è offline). */
-async function communityBuyersForSeeds(
+function isSeedOrOwned(
+  track: Track,
   seeds: Track[],
-): Promise<Map<string, { fanId: string; items: BcItem[]; seedHits: number }>> {
-  const map = new Map<string, { fanId: string; items: BcItem[]; seedHits: number }>();
-  try {
-    const cols = await buyerCollectionsForSeeds(seeds.map((s) => s.id));
-    for (const c of cols) {
-      const items: BcItem[] = [];
-      // track ids only — resolve from seeds + TRACKS later via JSON not available
-      // We only know track_ids; fetch via co-wish is enough as keys
-      Array.from(c.trackIds).forEach((id) => {
-        const t = TRACKS.find((x) => x.id === id) || seeds.find((x) => x.id === id);
-        if (t) items.push(trackToItem(t, true));
-      });
-      map.set(c.buyerId, {
-        fanId: c.buyerId,
-        items,
-        seedHits: c.seedHits,
-      });
+  ownedKeys: Set<string>,
+): boolean {
+  if (ownedKeys.has(itemKey(track.artist, track.title))) return true;
+  const title = track.title.toLowerCase();
+  const artist = track.artist.toLowerCase();
+  return seeds.some((s) => {
+    const st = s.title.toLowerCase();
+    const sa = s.artist.toLowerCase();
+    if (itemKey(s.artist, s.title) === itemKey(track.artist, track.title))
+      return true;
+    // stesso titolo (o contenuto) + artista correlato
+    if (title.includes(st) || st.includes(title)) {
+      if (artist.includes(sa.split(/\s+/)[0] || sa) || sa.includes(artist.split(/\s+/)[0] || artist))
+        return true;
     }
-  } catch {
-    /* no db */
-  }
-  return map;
-}
-
-/**
- * Fan sintetici Diglist-shaped: condividono seed + collezione affine
- * (artista/label/BPM) — usati solo se non ci sono buyers live.
- */
-function neighborPool(seed: Track, ownedKeys: Set<string>): Track[] {
-  return TRACKS.map((t) => {
-    if (ownedKeys.has(itemKey(t.artist, t.title))) return null;
-    if (itemKey(t.artist, t.title) === itemKey(seed.artist, seed.title))
-      return null;
-    let s = 0;
-    if (t.artist === seed.artist) s += 50;
-    if (t.label && seed.label && t.label === seed.label && t.label !== "—")
-      s += 40;
-    if (seed.bpm && t.bpm && Math.abs(seed.bpm - t.bpm) <= 5) s += 24;
-    if (t.genre === seed.genre) s += 18;
-    const shared = t.rails.filter(
-      (r) => seed.rails.includes(r) && r !== "novita" && r !== "gratis",
-    );
-    s += shared.length * 8;
-    if (
-      resolveGenre(t.genre).familySlug === resolveGenre(seed.genre).familySlug
-    ) {
-      s += 12;
-    }
-    return s >= 28 ? { t, s } : null;
-  })
-    .filter((x): x is { t: Track; s: number } => !!x)
-    .sort((a, b) => b.s - a.s)
-    .slice(0, 28)
-    .map((x) => x.t);
-}
-
-function syntheticCollectors(seeds: Track[], ownedKeys: Set<string>) {
-  const fans: {
-    id: string;
-    seedHits: number;
-    followed: boolean;
-    items: BcItem[];
-  }[] = [];
-
-  const pools = seeds.map((s) => neighborPool(s, ownedKeys));
-
-  seeds.forEach((seed, si) => {
-    const pool = pools[si] ?? [];
-    for (let f = 0; f < 10; f++) {
-      const id = `syn-${seed.id}-${f}`;
-      const items: BcItem[] = [trackToItem(seed, true)];
-      // ogni fan prende uno slice diverso del pool affine
-      for (let j = 0; j < pool.length; j++) {
-        if ((j + f) % 3 === 0) continue;
-        items.push(trackToItem(pool[j], (j + f) % 4 !== 0));
-      }
-      // croce forte: fan condivisi tra seed
-      if (f < 6) {
-        seeds.forEach((other, oi) => {
-          if (oi === si) return;
-          items.push(trackToItem(other, true));
-          // pezzi del pool dell'altro seed
-          for (const t of (pools[oi] ?? []).slice(0, 8)) {
-            if ((f + oi) % 2 === 0) items.push(trackToItem(t, true));
-          }
-        });
-      }
-      fans.push({
-        id,
-        seedHits: items.filter((it) =>
-          seeds.some((s) => itemKey(s.artist, s.title) === it.key),
-        ).length,
-        followed: f < 3,
-        items,
-      });
-    }
+    return false;
   });
-  return fans;
 }
 
-function scoreItem(opts: {
-  croceBuyers: number;
-  purchasedHits: number;
-  wishlistHits: number;
-  recentBoost: number;
-  followedFan: boolean;
-  followedArtist: boolean;
-  followedLabel: boolean;
-  ownedSameArtist: boolean;
-  ownedSameLabel: boolean;
-  numSold?: number;
-}): number {
-  let score =
-    opts.croceBuyers * 48 +
-    opts.purchasedHits * 22 +
-    opts.wishlistHits * 10 +
-    opts.recentBoost;
-
-  if (opts.followedFan) score += 35;
-  if (opts.followedArtist) score += 28;
-  if (opts.followedLabel) score += 22;
-  if (opts.ownedSameArtist) score += 18;
-  if (opts.ownedSameLabel) score += 14;
-
-  // fame penalty Diglist
-  if (opts.numSold != null) {
-    if (opts.numSold > 2500) score -= 40;
-    else if (opts.numSold > 700) score -= 22;
+function bumpHit(
+  map: Map<string, DigSocialHit>,
+  track: Track,
+  addScore: number,
+  reason: string,
+  croce = 0,
+  seedLinks = 0,
+  seeds: Track[] = [],
+  ownedKeys: Set<string> = new Set(),
+) {
+  if (isJunk(track.artist, track.title)) return;
+  if (seeds.length && isSeedOrOwned(track, seeds, ownedKeys)) return;
+  const key = itemKey(track.artist, track.title);
+  const prev = map.get(key);
+  if (!prev) {
+    map.set(key, {
+      track,
+      score: addScore,
+      croceBuyers: croce,
+      reasons: [reason],
+      genre: resolveGenre(track.genre).name,
+      seedLinks,
+    });
+    return;
   }
-  return score;
+  prev.score += addScore;
+  prev.croceBuyers = Math.max(prev.croceBuyers, croce);
+  prev.seedLinks = Math.max(prev.seedLinks, seedLinks);
+  if (!prev.reasons.includes(reason) && prev.reasons.length < 3) {
+    prev.reasons.push(reason);
+  }
 }
 
 export async function runDiglistSocial(
@@ -273,7 +170,7 @@ export async function runDiglistSocial(
   const cfg = LIMITS[mode];
   const picks = options.seeds.slice(0, 6);
 
-  // ——— 1–2 profilo ———
+  // ——— 1–2 Bandcamp profilo ———
   let profile: BcProfile | null = null;
   let bandcampLive = false;
   if (options.bandcampUser) {
@@ -284,40 +181,43 @@ export async function runDiglistSocial(
     }
   }
 
-  const ownedItems: BcItem[] = [];
   const ownedKeys = new Set<string>();
-  const markOwned = (it: BcItem) => {
-    if (ownedKeys.has(it.key)) return;
-    ownedKeys.add(it.key);
-    ownedItems.push(it);
+  const markOwned = (artist: string, title: string) => {
+    ownedKeys.add(itemKey(artist, title));
   };
 
   if (profile) {
-    profile.collection.forEach(markOwned);
-    profile.wishlist.forEach(markOwned);
+    profile.collection.forEach((i) => markOwned(i.artist, i.title));
+    profile.wishlist.forEach((i) => markOwned(i.artist, i.title));
   }
-  (options.ownedLocal ?? []).forEach((t) => markOwned(trackToItem(t, false)));
-  picks.forEach((t) => markOwned(trackToItem(t, true)));
-
-  const followedFans = new Set(
-    (profile?.followingFans ?? []).map((u) => u.toLowerCase()),
-  );
-  const followedArtists = new Set(
-    (profile?.followingArtists ?? []).map((a) => a.toLowerCase()),
-  );
-  const followedLabels = new Set(
-    (profile?.followingLabels ?? []).map((l) => l.toLowerCase()),
-  );
+  (options.ownedLocal ?? []).forEach((t) => markOwned(t.artist, t.title));
+  picks.forEach((t) => markOwned(t.artist, t.title));
 
   // ——— 3 seed ———
   let seeds = picks;
-  if (seeds.length === 0 && ownedItems.length) {
-    seeds = ownedItems.slice(0, 6).map((it) => itemToTrack(it));
+  if (seeds.length === 0 && profile?.collection.length) {
+    seeds = profile.collection.slice(0, 6).map((it) => ({
+      id: `bc-${it.key}`,
+      title: it.title,
+      artist: it.artist,
+      label: it.label || "—",
+      genre: "Electronic",
+      year: new Date().getFullYear(),
+      mood: "club",
+      coverHue: 200,
+      suggested: true,
+      rails: ["per-te"],
+      offers: [],
+      artworkUrl: it.artworkUrl,
+      source: "live" as const,
+    }));
+    seeds.forEach((t) => markOwned(t.artist, t.title));
   }
+
   if (seeds.length === 0) {
     return {
       tracks: [],
-      note: "Nessun pick e nessuna collezione — scegli fino a 6 dischi o collega Bandcamp",
+      note: "Servono pick (fino a 6) o profilo Bandcamp pubblico con collezione",
       method: "diglist-social",
       bandcampLive,
       audioActive: false,
@@ -325,250 +225,152 @@ export async function runDiglistSocial(
     };
   }
 
-  // ——— 4 supporters ———
-  type BuyerAcc = {
-    id: string;
-    username: string;
-    followed: boolean;
-    seedHits: Set<number>;
-    items: BcItem[];
-  };
-  const buyers = new Map<string, BuyerAcc>();
+  const hits = new Map<string, DigSocialHit>();
+  let buyersUsed = 0;
+  const bump = (
+    track: Track,
+    addScore: number,
+    reason: string,
+    croce = 0,
+    seedLinks = 0,
+  ) => bumpHit(hits, track, addScore, reason, croce, seedLinks, seeds, ownedKeys);
 
-  const ensureBuyer = (id: string, username: string, followed: boolean) => {
-    let b = buyers.get(id);
-    if (!b) {
-      b = { id, username, followed, seedHits: new Set(), items: [] };
-      buyers.set(id, b);
+  // ——— 4–6 community wishlist = supporters proxy ———
+  try {
+    const co = await coWishlistedWithSeeds(
+      seeds.map((s) => s.id),
+      mode === "long" ? 48 : 24,
+    );
+    for (const row of co) {
+      const croce = row.seed_hits;
+      const score =
+        croce * 80 + row.shared_fans * 25 + (croce >= 2 ? 60 : 0);
+      bump(
+        row.track,
+        score,
+        croce >= 2 ? `croce×${croce} wishlist` : "co-wishlist",
+        row.shared_fans,
+        croce,
+      );
     }
-    if (followed) b.followed = true;
-    return b;
-  };
-
-  if (bandcampLive) {
-    for (let si = 0; si < seeds.length; si++) {
-      const seed = seeds[si];
-      const bcUrl = seed.offers?.find((o) => o.storeId === "bandcamp")?.url;
-      // without tralbum id we can't load supporters from BC reliably
-      void bcUrl;
-      // try parse item id from dig- keys later — skip if 0
-    }
+    buyersUsed = Math.max(
+      buyersUsed,
+      co.reduce((n, r) => n + r.shared_fans, 0),
+    );
+  } catch {
+    /* no db */
   }
 
-  // Community wishlist buyers (isomorfo ai supporter BC)
-  const community = await communityBuyersForSeeds(seeds);
-  Array.from(community.entries()).forEach(([id, col]) => {
-    const b = ensureBuyer(id, id.slice(0, 12), false);
-    seeds.forEach((s, si) => {
-      if (col.items.some((it) => it.key === itemKey(s.artist, s.title)) || col.seedHits > 0) {
-        // if they have seed id in collection
-        if (col.items.some((it) => it.key === itemKey(s.artist, s.title))) {
-          b.seedHits.add(si);
-        }
-      }
-    });
-    // also mark by track id presence via seedHits count from SQL
-    if (col.seedHits > 0 && b.seedHits.size === 0) {
-      for (let i = 0; i < Math.min(col.seedHits, seeds.length); i++) b.seedHits.add(i);
-    }
-    b.items.push(...col.items);
-  });
-
-  // Synthetic Diglist collectors if thin
-  if (buyers.size < 4) {
-    for (const syn of syntheticCollectors(seeds, ownedKeys)) {
-      const b = ensureBuyer(syn.id, syn.id, syn.followed);
-      seeds.forEach((s, si) => {
-        if (syn.items.some((it) => it.key === itemKey(s.artist, s.title))) {
-          b.seedHits.add(si);
-        }
+  try {
+    const cols = await buyerCollectionsForSeeds(seeds.map((s) => s.id));
+    buyersUsed = Math.max(buyersUsed, cols.length);
+    for (const col of cols.filter((c) => c.seedHits >= 2).slice(0, cfg.buyers)) {
+      Array.from(col.trackIds).forEach((tid) => {
+        const t = TRACKS.find((x) => x.id === tid);
+        if (!t) return;
+        bump(t, 70 + col.seedHits * 20, `buyer croce×${col.seedHits}`, 1, col.seedHits);
       });
-      b.items.push(...syn.items);
     }
+  } catch {
+    /* ignore */
   }
 
-  // ——— 5 croce: rank buyers ———
-  const rankedBuyers = Array.from(buyers.values())
-    .map((b) => ({
-      ...b,
-      overlap: b.seedHits.size,
-    }))
-    .filter((b) => b.overlap >= 1)
-    .sort((a, b) => {
-      // followed first, then overlap
-      if (a.followed !== b.followed) return a.followed ? -1 : 1;
-      return b.overlap - a.overlap;
-    })
-    .slice(0, cfg.buyers);
-
-  // ——— 6–7 expand libraries ———
-  for (const b of rankedBuyers) {
-    const depth =
-      b.followed || b.overlap >= 2
-        ? cfg.fanDepthMax
-        : cfg.fanDepthMin;
-    if (bandcampLive && /^\d+$/.test(b.id)) {
-      const lib = await loadFanLibrary(Number(b.id), depth);
-      b.items.push(...lib);
-    }
-    // already have items from community/synth — trim
-    b.items = b.items.slice(0, depth);
+  if (bandcampLive && profile) {
+    void loadFanLibrary;
   }
 
-  // Long hop: skip without live following graph (step 7 note)
-  const longHop = mode === "long" && bandcampLive;
-
-  // ——— 8 score candidates ———
-  type Acc = {
-    item: BcItem;
-    croce: Set<string>;
-    purchased: number;
-    wishlist: number;
-    recent: number;
-    followedFan: boolean;
-    seedLinks: Set<number>;
-    numSold?: number;
-  };
-  const cand = new Map<string, Acc>();
-
-  for (const b of rankedBuyers) {
-    for (const it of b.items) {
-      if (ownedKeys.has(it.key)) continue; // già tuoi — mai riproposti
-      if (seeds.some((s) => itemKey(s.artist, s.title) === it.key)) continue;
-      let row = cand.get(it.key);
-      if (!row) {
-        row = {
-          item: it,
-          croce: new Set(),
-          purchased: 0,
-          wishlist: 0,
-          recent: 0,
-          followedFan: false,
-          seedLinks: new Set(),
-          numSold: it.numSold,
-        };
-        cand.set(it.key, row);
-      }
-      row.croce.add(b.id);
-      if (it.purchased) row.purchased += 1;
-      else row.wishlist += 1;
-      if (b.followed) row.followedFan = true;
-      b.seedHits.forEach((si) => row!.seedLinks.add(si));
-      if (it.addedAt && Date.now() - it.addedAt < 1000 * 60 * 60 * 24 * 180) {
-        row.recent += 4;
-      }
-      if (it.numSold != null) row.numSold = it.numSold;
-    }
+  // ——— Discogs: solo artist/label reali ———
+  try {
+    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 28 : 16);
+    dg.tracks.forEach((t, i) => {
+      const sameArtist = seeds.some(
+        (s) => s.artist.toLowerCase() === t.artist.toLowerCase(),
+      );
+      const sameLabel = seeds.some(
+        (s) =>
+          s.label &&
+          s.label !== "—" &&
+          s.label.toLowerCase() === t.label.toLowerCase(),
+      );
+      // scarta Discogs “roster” debole senza artist/label match ai pick
+      if (!sameArtist && !sameLabel) return;
+      bump(
+        t,
+        (sameArtist ? 120 : 95) - i,
+        sameArtist ? "Discogs stesso artista" : "Discogs stessa label",
+        2,
+        2,
+      );
+    });
+  } catch {
+    /* ignore */
   }
 
-  const ownedArtists = new Set(
-    ownedItems.map((i) => i.artist.toLowerCase()),
+  // iTunes: SOLO stesso artista
+  try {
+    const it = await scoutItunesArtists(seeds, mode === "long" ? 14 : 10);
+    it.tracks.forEach((t) => bump(t, 110, "iTunes discografia artista", 1, 1));
+  } catch {
+    /* ignore */
+  }
+
+  // Catalogo: stesso artista / stessa label
+  const seedArtists = new Set(seeds.map((s) => s.artist.toLowerCase()));
+  const seedLabels = new Set(
+    seeds
+      .map((s) => s.label)
+      .filter((l) => l && l !== "—" && l.length >= 3 && l.toLowerCase() !== "x"),
   );
-  const ownedLabels = new Set(
-    ownedItems
-      .map((i) => (i.label || "").toLowerCase())
-      .filter((l) => l && l !== "—"),
-  );
+  for (const t of TRACKS) {
+    if (seedArtists.has(t.artist.toLowerCase())) {
+      bump(t, 130, "stesso artista catalogo", 2, 2);
+    } else if (seedLabels.has(t.label)) {
+      bump(t, 100, `stessa label ${t.label}`, 2, 1);
+    }
+  }
 
-  let hits: DigSocialHit[] = [];
-  Array.from(cand.values()).forEach((row) => {
-    const score = scoreItem({
-      croceBuyers: row.croce.size,
-      purchasedHits: row.purchased,
-      wishlistHits: row.wishlist,
-      recentBoost: row.recent,
-      followedFan: row.followedFan,
-      followedArtist: followedArtists.has(row.item.artist.toLowerCase()),
-      followedLabel: followedLabels.has((row.item.label || "").toLowerCase()),
-      ownedSameArtist: ownedArtists.has(row.item.artist.toLowerCase()),
-      ownedSameLabel: ownedLabels.has((row.item.label || "").toLowerCase()),
-      numSold: row.numSold,
-    });
-    // soglia: serve almeno croce o followed
-    if (row.croce.size < 1 && !row.followedFan) return;
-    if (score < 30) return;
-
-    const reasons: string[] = [];
-    if (row.croce.size >= 2) reasons.push(`croce×${row.croce.size}`);
-    else if (row.croce.size === 1) reasons.push("1 buyer in comune");
-    if (row.followedFan) reasons.push("fan che segui");
-    if (row.purchased) reasons.push("comprato");
-    if (ownedArtists.has(row.item.artist.toLowerCase()))
-      reasons.push("stesso artista già tuo");
-
-    const genreHint =
-      seeds.find((s) => row.seedLinks.has(seeds.indexOf(s)))?.genre ||
-      seeds[0]?.genre ||
-      "Electronic";
-
-    hits.push({
-      track: itemToTrack(row.item, genreHint),
-      score,
-      croceBuyers: row.croce.size,
-      reasons: reasons.slice(0, 3),
-      genre: resolveGenre(genreHint).name,
-      seedLinks: row.seedLinks.size,
-    });
+  // Affinity cluster Diglist (catalogo curato) — croce tra pick
+  const affinity = rankByAffinity(seeds, [], mode === "long" ? 24 : 14);
+  affinity.forEach((h) => {
+    bump(
+      h.track,
+      90 + h.croce * 40 + h.score / 5,
+      h.croce >= 2 ? `cluster croce×${h.croce}` : "cluster digger",
+      Math.max(1, h.croce),
+      h.croce,
+    );
   });
 
-  // ——— 9 label catalog sprinkle (pochi) ———
-  const labelBoost: Track[] = [];
-  const hotLabels = new Map<string, number>();
-  hits.forEach((h) => {
-    const l = h.track.label;
-    if (l && l !== "—") hotLabels.set(l, (hotLabels.get(l) ?? 0) + 1);
-  });
-  Array.from(hotLabels.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 3)
-    .forEach(([label]) => {
-      for (const t of TRACKS) {
-        if (t.label !== label) continue;
-        if (ownedKeys.has(itemKey(t.artist, t.title))) continue;
-        if (seeds.some((s) => s.id === t.id)) continue;
-        labelBoost.push(t);
-        if (labelBoost.length >= 6) break;
-      }
-    });
-  labelBoost.slice(0, 4).forEach((t) => {
-    hits.push({
-      track: t,
-      score: 45,
-      croceBuyers: 0,
-      reasons: [`catalogo label ${t.label}`],
-      genre: t.genre,
-      seedLinks: 0,
-    });
+  let ranked = Array.from(hits.values())
+    .filter((h) => h.score >= 55)
+    .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
+
+  ranked = diversify(ranked, cfg.out);
+
+  // Generi solo per filtri (passo 11)
+  ranked.forEach((h) => {
+    h.genre = resolveGenre(h.track.genre).name;
   });
 
-  // ——— 10 audio compare (placeholder: off) ———
   const audioActive = options.audioCompare === true;
-  // EffNet non attivo online — se un giorno c'è, mix 62/38 qui
-
-  hits.sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
-
-  // ——— 11 diversità + generi per filtri ———
-  hits = diversify(hits, cfg.out);
-
-  const sourceNote = bandcampLive
+  const src = bandcampLive
     ? "Bandcamp live"
-    : "schema Diglist su community/catalogo (BC Cloudflare)";
+    : "Discogs artist/label + co-wishlist (BC Cloudflare)";
 
   return {
-    tracks: hits,
+    tracks: ranked,
     bandcampLive,
     audioActive,
     method: "diglist-social-croce",
-    note: `${mode} · ${hits.length} dig · croce ${rankedBuyers.length} buyers · ${sourceNote}${audioActive ? " · audio on" : " · lista da compratori (audio off)"}${longHop ? " · long hop" : ""}`,
+    note: `${mode} · ${ranked.length} dig · ${src} · genere solo filtri${audioActive ? "" : " · audio off"}`,
     stats: {
       owned: ownedKeys.size,
-      buyersUsed: rankedBuyers.length,
-      candidates: cand.size,
+      buyersUsed: Math.min(buyersUsed, cfg.buyers) || buyersUsed,
+      candidates: hits.size,
     },
   };
 }
 
-/** Station: stesso motore, 1 seed. */
 export async function runStationSocial(
   seed: Track,
   opts?: { bandcampUser?: string; ownedLocal?: Track[] },
