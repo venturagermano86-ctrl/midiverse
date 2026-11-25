@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AddToCollectionButton } from "@/components/AddToCollectionButton";
+import { HeartWish } from "@/components/HeartWish";
 import { QuickPlay } from "@/components/QuickPlay";
 import { StationButton } from "@/components/StationButton";
 import { digitalOffers, formatOfferPrice, vinylOffers } from "@/lib/catalog";
@@ -9,11 +9,9 @@ import type { Track } from "@/lib/types";
 
 type Props = {
   tracks: Track[];
-  /** Mostra prezzo digi sotto il titolo */
   showPrice?: boolean;
 };
 
-/** Cover / centrino stile Dig List — griglia di dischi. */
 function Centrino({ track }: { track: Track }) {
   const hue = track.coverHue % 360;
   if (track.artworkUrl) {
@@ -63,7 +61,9 @@ export function RecordShelf({ tracks, showPrice = true }: Props) {
               <Link href={`/traccia/${track.id}`} className="block">
                 <Centrino track={track} />
               </Link>
-              {/* Play sulla cover — non naviga via */}
+              <div className="absolute left-2 top-2 z-10">
+                <HeartWish track={track} />
+              </div>
               <div className="absolute bottom-2 right-2 z-10 drop-shadow-md">
                 <QuickPlay src={track.previewUrl} title={track.title} />
               </div>
@@ -82,7 +82,6 @@ export function RecordShelf({ tracks, showPrice = true }: Props) {
             </Link>
             <div className="mt-2 flex flex-wrap gap-1.5">
               <StationButton track={track} compact />
-              <AddToCollectionButton trackId={track.id} track={track} compact />
               {hasVinyl ? (
                 <Link
                   href={`/traccia/${track.id}?media=vinyl#buy`}

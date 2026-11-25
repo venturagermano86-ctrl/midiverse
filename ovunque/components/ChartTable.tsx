@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
+import { HeartWish } from "@/components/HeartWish";
 import { QuickPlay } from "@/components/QuickPlay";
 import { StationButton } from "@/components/StationButton";
 import {
@@ -132,8 +132,8 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                 </td>
                 <td className="px-2 py-3 text-right">
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
+                    <HeartWish track={track} />
                     <StationButton track={track} compact />
-                    <AddToCollectionButton trackId={track.id} track={track} compact />
                   </div>
                 </td>
               </tr>

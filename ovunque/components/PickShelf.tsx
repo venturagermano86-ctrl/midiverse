@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { CoverArt } from "@/components/CoverArt";
+import { HeartWish } from "@/components/HeartWish";
 import { QuickPlay } from "@/components/QuickPlay";
 import type { Track } from "@/lib/types";
 
@@ -124,7 +125,14 @@ export function PickShelf({ tracks, openInNewTab = true }: Props) {
                     </span>
                   ) : null}
                   <div
-                    className="absolute bottom-2 left-2 z-10"
+                    className="absolute left-2 top-2 z-10"
+                    onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
+                    <HeartWish track={track} />
+                  </div>
+                  <div
+                    className="absolute bottom-2 right-2 z-10"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >

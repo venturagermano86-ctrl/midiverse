@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
+import { HeartWish } from "@/components/HeartWish";
 import { QuickPlay } from "@/components/QuickPlay";
 import { StationButton } from "@/components/StationButton";
 import { digitalOffers, formatOfferPrice, hasFreeOffer, vinylOffers } from "@/lib/catalog";
@@ -35,11 +35,20 @@ export function TrackCard({ track, index = 0 }: Props) {
             className="aspect-square w-full transition duration-400 group-hover:brightness-110"
           />
           {free ? (
-            <span className="absolute left-2 top-2 bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-ink">
+            <span className="absolute left-2 top-2 z-[5] bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-ink">
               Free
             </span>
+          ) : (
+            <div className="absolute left-2 top-2 z-10" onClick={(e) => e.preventDefault()}>
+              <HeartWish track={track} />
+            </div>
+          )}
+          {free ? (
+            <div className="absolute right-2 top-2 z-10" onClick={(e) => e.preventDefault()}>
+              <HeartWish track={track} />
+            </div>
           ) : null}
-          <div className="absolute bottom-2 right-2" onClick={(e) => e.preventDefault()}>
+          <div className="absolute bottom-2 right-2 z-10" onClick={(e) => e.preventDefault()}>
             <QuickPlay src={track.previewUrl} title={track.title} />
           </div>
         </div>
@@ -63,7 +72,6 @@ export function TrackCard({ track, index = 0 }: Props) {
       </Link>
       <div className="mt-2 flex flex-wrap gap-1.5">
         <StationButton track={track} compact />
-        <AddToCollectionButton trackId={track.id} track={track} compact />
       </div>
     </div>
   );
