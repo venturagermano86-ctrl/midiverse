@@ -29,6 +29,7 @@ function toTrack(song: ItunesSong): Track | null {
   const offers = buildStoreOffers(song.artistName, song.trackName, {
     appleUrl: song.trackViewUrl,
     applePriceUsd: price,
+    seed: song.trackId,
     vinylListings: sampleVinylListings(song.artistName, song.trackName, song.trackId),
   });
 
@@ -112,6 +113,7 @@ export async function itunesElectronicChart(limit = 20): Promise<Track[]> {
     const offers = buildStoreOffers(artist, title, {
       appleUrl: appleUrl || undefined,
       applePriceUsd: amount,
+      seed: Number(id) || 0,
       vinylListings: sampleVinylListings(artist, title, Number(id) || 0),
     });
 

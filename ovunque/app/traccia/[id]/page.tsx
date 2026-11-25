@@ -8,12 +8,12 @@ import { StoreOffers } from "@/components/StoreOffers";
 import { TrackCard } from "@/components/TrackCard";
 import { WaveformStrip } from "@/components/WaveformStrip";
 import {
-  cheapestOffer,
   ctaLabel,
+  digitalOffers,
   formatPrice,
   getTrack,
-  sortedOffers,
   TRACKS,
+  vinylOffers,
 } from "@/lib/catalog";
 import { findSimilar, frequentlyTogether } from "@/lib/engines/similar";
 import { itunesLookup } from "@/lib/live/itunes";
@@ -21,7 +21,10 @@ import { scanTrack } from "@/lib/scanners/engine";
 import { storeName } from "@/lib/stores";
 import type { Track } from "@/lib/types";
 
-type Props = { params: { id: string } };
+type Props = {
+  params: { id: string };
+  searchParams?: { media?: string };
+};
 
 export const dynamicParams = true;
 
@@ -33,10 +36,10 @@ export async function generateMetadata({ params }: Props) {
   const track =
     getTrack(params.id) ??
     (params.id.startsWith("itunes") ? await itunesLookup(params.id) : null);
-  if (!track) return { title: "Track — OVUNQUE" };
+  if (!track) return { title: "Track — Dig List" };
   return {
-    title: `${track.title} — ${track.artist} | OVUNQUE`,
-    description: `Buy ${track.title} on Beatport, Bandcamp and more.`,
+    title: `${track.title} — ${track.artist} | Dig List`,
+    description: `Buy ${track.title} — digital or vinyl, compare stores.`,
   };
 }
 
@@ -47,25 +50,27 @@ async function resolveTrack(id: string): Promise<Track | null> {
   return null;
 }
 
-export default async function TrackPage({ params }: Props) {
+export default async function TrackPage({ params, searchParams }: Props) {
   const track = await resolveTrack(params.id);
   if (!track) notFound();
 
-  const offers = sortedOffers(track);
-  const best = cheapestOffer(track);
-  if (!best) notFound();
+  const digi = digitalOffers(track.offers);
+  const vinyl = vinylOffers(track.offers);
+  const best = digi[0] ?? null;
+  if (!best && digi.length === 0 && vinyl.length === 0) notFound();
 
-  const exclusive = offers.length === 1;
-  const isFree = best.kind === "free" || best.priceEur === 0;
+  const exclusive = digi.length === 1 && vinyl.length === 0;
+  const isFree = best ? best.kind === "free" || best.priceEur === 0 : false;
   const report = scanTrack(track);
-  const paidKnown = offers.filter(
+  const paidKnown = digi.filter(
     (o) => o.kind === "paid" && o.priceEur != null && o.priceEur > 0,
   ).length;
   const similar = findSimilar(track.id, 8);
   const together = frequentlyTogether(track.id, 4);
-  const bandcampOffer = offers.find((o) => o.storeId === "bandcamp");
-  const beatportOffer = offers.find((o) => o.storeId === "beatport");
+  const bandcampOffer = digi.find((o) => o.storeId === "bandcamp");
+  const beatportOffer = digi.find((o) => o.storeId === "beatport");
   const isLive = track.source === "itunes" || track.id.startsWith("itunes");
+  const initialTab = searchParams?.media === "vinyl" && vinyl.length > 0 ? "vinyl" : "digital";
 
   return (
     <main className="px-4 py-8 md:px-8 md:py-10">
@@ -99,12 +104,12 @@ export default async function TrackPage({ params }: Props) {
                 {track.genre}
               </p>
               {isLive ? (
-                <span className="bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase text-ink">
+                <span className="rounded-dig bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase text-ink">
                   Live track
                 </span>
               ) : null}
             </div>
-            <h1 className="mt-2 font-display text-4xl font-extrabold tracking-tight text-mist md:text-5xl">
+            <h1 className="mt-2 font-display text-4xl font-black tracking-tight text-mist md:text-5xl">
               {track.title}
             </h1>
             <p className="mt-2 text-xl text-bandcamp">{track.artist}</p>
@@ -117,7 +122,7 @@ export default async function TrackPage({ params }: Props) {
                 ["BPM", track.bpm?.toString() ?? "—"],
                 ["Key", track.key ?? "—"],
                 ["Genre", track.genre],
-                ["Stores", String(offers.length)],
+                ["Digital", String(digi.length)],
               ].map(([k, v]) => (
                 <div key={k} className="bg-panel px-3 py-3">
                   <dt className="text-[0.6rem] font-bold uppercase tracking-wider text-muted">{k}</dt>
@@ -127,22 +132,22 @@ export default async function TrackPage({ params }: Props) {
             </dl>
 
             <div
-              className={`mt-6 border p-5 ${
+              className={`mt-6 rounded-dig-lg border p-5 ${
                 isFree ? "border-signal/50 bg-signal/10" : "border-line bg-panel"
               }`}
             >
-              {isFree ? (
+              {best && isFree ? (
                 <>
-                  <p className="text-sm font-bold text-signal">Free download path</p>
+                  <p className="text-sm font-bold text-signal">Free download</p>
                   <p className="mt-2 font-display text-2xl font-bold text-mist">
                     {storeName(best.storeId)} · Gratis
                   </p>
                 </>
-              ) : (
+              ) : best ? (
                 <>
                   <p className="text-sm text-muted">
-                    Collegata a <strong className="text-mist">{offers.length} store reali</strong>
-                    {paidKnown ? ` · ${paidKnown} con prezzo noto` : ""}
+                    Digital · <strong className="text-mist">{digi.length} store</strong>
+                    {paidKnown ? ` · ${paidKnown} con prezzo` : ""}
                   </p>
                   <p className="mt-2 font-display text-2xl font-bold text-mist">
                     {formatPrice(best.priceEur, best.kind)}{" "}
@@ -150,28 +155,36 @@ export default async function TrackPage({ params }: Props) {
                       · {storeName(best.storeId)}
                     </span>
                   </p>
-                  <p className="mt-1 text-xs text-muted">
-                    Beatport / Bandcamp / Juno ecc. aprono la ricerca sulla traccia vera — il prezzo
-                    lo conferma lo store.
-                  </p>
                 </>
+              ) : (
+                <p className="text-sm text-muted">Solo vinile disponibile — apri il tab Vinyl.</p>
               )}
 
               <div className="mt-4 flex flex-wrap gap-2">
-                <a
-                  href={best.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex bg-signal px-5 py-3 text-sm font-bold text-ink hover:brightness-110"
-                >
-                  {ctaLabel(best, exclusive)}
-                </a>
+                {best ? (
+                  <a
+                    href={best.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex rounded-dig bg-signal px-5 py-3 text-sm font-bold text-ink hover:bg-signal-hi"
+                  >
+                    {ctaLabel(best, exclusive)}
+                  </a>
+                ) : null}
+                {vinyl.length > 0 ? (
+                  <a
+                    href="#buy"
+                    className="rounded-dig border border-signal/50 px-4 py-3 text-sm font-bold text-signal hover:bg-signal hover:text-ink"
+                  >
+                    Vinyl ({vinyl.length}) →
+                  </a>
+                ) : null}
                 {beatportOffer ? (
                   <a
                     href={beatportOffer.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal"
+                    className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal"
                   >
                     Beatport
                   </a>
@@ -181,17 +194,17 @@ export default async function TrackPage({ params }: Props) {
                     href={bandcampOffer.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="border border-bandcamp/40 px-4 py-3 text-sm font-semibold text-bandcamp hover:bg-bandcamp/10"
+                    className="rounded-dig border border-bandcamp/40 px-4 py-3 text-sm font-semibold text-bandcamp hover:bg-bandcamp/10"
                   >
                     Bandcamp
                   </a>
                 ) : null}
-                <AddToCollectionButton trackId={track.id} />
+                <AddToCollectionButton trackId={track.id} track={track} />
               </div>
             </div>
           </div>
 
-          <StoreOffers offers={offers} />
+          <StoreOffers offers={track.offers} initialTab={initialTab} />
           <ScanPanel report={report} />
         </div>
       </div>
@@ -200,7 +213,7 @@ export default async function TrackPage({ params }: Props) {
         <div className="mt-16 space-y-14">
           <SimilarRail
             title="Fans also bought"
-            subtitle="Simili dal catalogo OVUNQUE"
+            subtitle="Simili dalla wishlist Dig List"
             hits={similar}
           />
           {together.length > 0 ? (

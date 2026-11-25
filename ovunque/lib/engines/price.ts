@@ -150,7 +150,7 @@ export function ctaLabel(offer: Offer, exclusive: boolean): string {
 
 export function offerButtonLabel(offer: Offer): string {
   if (offer.kind === "free" || offer.priceEur === 0) return "Scarica gratis";
-  if (offer.priceEur == null) return "Apri store";
   if (offer.media === "vinyl") return "Compra vinile";
+  if (offer.priceEur == null) return "Compra";
   return "Compra";
 }

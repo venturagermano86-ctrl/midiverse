@@ -7,7 +7,7 @@ import { searchTracks } from "@/lib/catalog";
 import { ALL_GENRES, resolveGenre } from "@/lib/genres";
 import type { Track } from "@/lib/types";
 
-type MediaFilter = "all" | "digital" | "vinyl";
+type MediaFilter = "digital" | "vinyl";
 
 export function LiveSearch() {
   const params = useSearchParams();
@@ -15,7 +15,7 @@ export function LiveSearch() {
   const initialGenre = params.get("genre") ?? "Tutti";
   const [q, setQ] = useState(initialQ);
   const [genre, setGenre] = useState(initialGenre);
-  const [media, setMedia] = useState<MediaFilter>("all");
+  const [media, setMedia] = useState<MediaFilter>("digital");
   const [liveTracks, setLiveTracks] = useState<Track[]>([]);
   const [liveNote, setLiveNote] = useState("");
   const [loading, setLoading] = useState(false);
@@ -27,7 +27,6 @@ export function LiveSearch() {
 
   const curated = useMemo(() => {
     const base = searchTracks(q, genre === "Tutti" ? undefined : genre);
-    if (media === "all") return base;
     return base.filter((t) =>
       media === "vinyl"
         ? t.offers.some((o) => o.media === "vinyl")
@@ -36,7 +35,6 @@ export function LiveSearch() {
   }, [q, genre, media]);
 
   const filteredLive = useMemo(() => {
-    if (media === "all") return liveTracks;
     return liveTracks.filter((t) =>
       media === "vinyl"
         ? t.offers.some((o) => o.media === "vinyl")
@@ -92,9 +90,8 @@ export function LiveSearch() {
         <div className="flex flex-wrap gap-1.5">
           {(
             [
-              ["all", "Tutto"],
-              ["digital", "Solo digitale"],
-              ["vinyl", "Solo vinile"],
+              ["digital", "Digital"],
+              ["vinyl", "Vinyl"],
             ] as const
           ).map(([id, label]) => (
             <button

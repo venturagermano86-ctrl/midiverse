@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
-import { cheapestOffer, formatPrice, hasFreeOffer } from "@/lib/catalog";
+import { digitalOffers, formatOfferPrice, hasFreeOffer, vinylOffers } from "@/lib/catalog";
 import { storeName } from "@/lib/stores";
 import type { Track } from "@/lib/types";
 
@@ -11,10 +11,11 @@ type Props = {
 };
 
 export function TrackCard({ track, index = 0 }: Props) {
-  const best = cheapestOffer(track);
-  if (!best) return null;
-  const multi = track.offers.length > 1;
+  const digi = digitalOffers(track.offers);
+  const best = digi[0];
+  if (!best && digi.length === 0) return null;
   const free = hasFreeOffer(track);
+  const hasVinyl = vinylOffers(track.offers).length > 0;
 
   return (
     <div
@@ -29,11 +30,11 @@ export function TrackCard({ track, index = 0 }: Props) {
             artworkUrl={track.artworkUrl}
             className="aspect-square w-full transition duration-400 group-hover:brightness-110"
           />
-          {free && (
+          {free ? (
             <span className="absolute left-2 top-2 bg-signal px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-ink">
               Free
             </span>
-          )}
+          ) : null}
         </div>
         <div className="mt-3 space-y-1">
           <p className="truncate font-display text-sm font-semibold text-mist group-hover:text-signal">
@@ -44,24 +45,28 @@ export function TrackCard({ track, index = 0 }: Props) {
             {track.genre}
             {track.bpm ? ` · ${track.bpm}` : ""}
           </p>
-          <p className="pt-1 text-xs">
-            <span className="font-semibold text-signal">
-              {formatPrice(best.priceEur, best.kind)}
-            </span>
-            <span className="text-muted">
-              {" "}
-              ·{" "}
-              {free
-                ? storeName(best.storeId)
-                : multi
-                  ? `${storeName(best.storeId)} · ${track.offers.length} stores`
-                  : storeName(best.storeId)}
-            </span>
-          </p>
+          {best ? (
+            <p className="pt-1 text-xs">
+              <span className="font-semibold text-signal">{formatOfferPrice(best)}</span>
+              <span className="text-muted">
+                {" "}
+                · {storeName(best.storeId)}
+                {digi.length > 1 ? ` · ${digi.length}` : ""}
+              </span>
+            </p>
+          ) : null}
         </div>
       </Link>
-      <div className="mt-2">
-        <AddToCollectionButton trackId={track.id} compact />
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        <AddToCollectionButton trackId={track.id} track={track} compact />
+        {hasVinyl ? (
+          <Link
+            href={`/traccia/${track.id}?media=vinyl#buy`}
+            className="rounded-dig border border-signal/40 px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-signal hover:bg-signal hover:text-ink"
+          >
+            Vinyl
+          </Link>
+        ) : null}
       </div>
     </div>
   );

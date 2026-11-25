@@ -2,11 +2,9 @@ import Link from "next/link";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
 import {
-  cheapestOffer,
+  digitalOffers,
   formatOfferPrice,
-  formatPrice,
   hasFreeOffer,
-  landedPrice,
   vinylOffers,
 } from "@/lib/catalog";
 import { storeName } from "@/lib/stores";
@@ -29,16 +27,20 @@ export function ChartTable({ tracks, showRank = true }: Props) {
             <th className="hidden px-3 py-3 font-semibold lg:table-cell">Genre</th>
             <th className="px-3 py-3 font-semibold">BPM</th>
             <th className="hidden px-3 py-3 font-semibold sm:table-cell">Key</th>
-            <th className="px-3 py-3 font-semibold text-right">Best / vinyl</th>
+            <th className="px-3 py-3 font-semibold text-right">Digital</th>
+            <th className="px-3 py-3 font-semibold text-right">Vinyl</th>
             <th className="w-24 px-3 py-3 font-semibold" />
           </tr>
         </thead>
         <tbody>
           {tracks.map((track, i) => {
-            const best = cheapestOffer(track);
-            if (!best) return null;
+            const digi = digitalOffers(track.offers);
+            const best = digi[0] ?? null;
+            if (!best && digi.length === 0 && vinylOffers(track.offers).length === 0) {
+              return null;
+            }
             const free = hasFreeOffer(track);
-            const bestVinyl = vinylOffers(track.offers)[0];
+            const hasVinyl = vinylOffers(track.offers).length > 0;
             return (
               <tr key={track.id} className="chart-row border-b border-line/80 bg-row">
                 {showRank ? (
@@ -67,24 +69,34 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                 <td className="px-3 py-2.5 tabular-nums text-mist/80">{track.bpm ?? "—"}</td>
                 <td className="hidden px-3 py-2.5 text-mist/80 sm:table-cell">{track.key ?? "—"}</td>
                 <td className="px-3 py-2.5 text-right">
-                  <span className={`font-semibold ${free ? "text-signal" : "text-mist"}`}>
-                    {formatOfferPrice(best)}
-                  </span>
-                  <span className="mt-0.5 block text-[0.65rem] text-muted">
-                    {storeName(best.storeId)}
-                    {track.offers.length > 1 ? ` · ${track.offers.length} stores` : ""}
-                  </span>
-                  {bestVinyl ? (
-                    <span className="mt-1 block text-[0.65rem] text-signal">
-                      Vinyl {formatOfferPrice(bestVinyl)}
-                      {landedPrice(bestVinyl) != null
-                        ? ` · tot. ${formatPrice(landedPrice(bestVinyl))}`
-                        : ""}
-                    </span>
-                  ) : null}
+                  {best ? (
+                    <>
+                      <span className={`font-semibold ${free ? "text-signal" : "text-mist"}`}>
+                        {formatOfferPrice(best)}
+                      </span>
+                      <span className="mt-0.5 block text-[0.65rem] text-muted">
+                        {storeName(best.storeId)}
+                        {digi.length > 1 ? ` · ${digi.length}` : ""}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
                 </td>
                 <td className="px-3 py-2.5 text-right">
-                  <AddToCollectionButton trackId={track.id} compact />
+                  {hasVinyl ? (
+                    <Link
+                      href={`/traccia/${track.id}?media=vinyl#buy`}
+                      className="inline-flex rounded-dig border border-signal/40 px-2.5 py-1.5 text-[0.65rem] font-bold uppercase tracking-wider text-signal transition hover:bg-signal hover:text-ink"
+                    >
+                      Vinyl →
+                    </Link>
+                  ) : (
+                    <span className="text-[0.65rem] text-muted">—</span>
+                  )}
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <AddToCollectionButton trackId={track.id} track={track} compact />
                 </td>
               </tr>
             );

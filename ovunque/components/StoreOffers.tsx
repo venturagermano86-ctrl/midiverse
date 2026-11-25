@@ -2,21 +2,24 @@
 
 import { useMemo, useState } from "react";
 import {
+  digitalOffers,
   formatOfferPrice,
-  formatPrice,
   formatVinylBreakdown,
   landedPrice,
   offerButtonLabel,
   rankOffers,
+  vinylOffers,
 } from "@/lib/catalog";
 import { storeName } from "@/lib/stores";
 import type { Offer } from "@/lib/types";
 
-type MediaFilter = "all" | "digital" | "vinyl";
+type MediaTab = "digital" | "vinyl";
 type SortMode = "cheap" | "alpha";
 
 type Props = {
   offers: Offer[];
+  /** Tab iniziale: digital di default — vinyl solo se clicchi. */
+  initialTab?: MediaTab;
 };
 
 function OfferRow({
@@ -55,15 +58,6 @@ function OfferRow({
               Beatport
             </span>
           ) : null}
-          {offer.media === "vinyl" ? (
-            <span className="rounded-dig bg-signal/15 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-signal">
-              Vinyl
-            </span>
-          ) : (
-            <span className="rounded-dig border border-line px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wider text-muted">
-              Digital
-            </span>
-          )}
           {isFree ? (
             <span className="rounded-dig bg-signal/20 px-2 py-0.5 text-[0.65rem] font-bold uppercase tracking-wider text-signal">
               Free
@@ -132,79 +126,102 @@ function OfferRow({
         }`}
       >
         {offer.storeId === "discogs" && offer.priceFrom
-          ? "Vedi scelte Discogs"
+          ? "Scelte Discogs"
           : offerButtonLabel(offer)}
       </a>
     </li>
   );
 }
 
-export function StoreOffers({ offers }: Props) {
-  const [media, setMedia] = useState<MediaFilter>("all");
+export function StoreOffers({ offers, initialTab = "digital" }: Props) {
+  const digi = useMemo(() => digitalOffers(offers), [offers]);
+  const vinyl = useMemo(() => vinylOffers(offers), [offers]);
+  const [tab, setTab] = useState<MediaTab>(
+    initialTab === "vinyl" && vinyl.length > 0 ? "vinyl" : "digital",
+  );
   const [sort, setSort] = useState<SortMode>("cheap");
-  /** 0 = solo i più economici, 100 = tutti. */
   const [cheapBias, setCheapBias] = useState(100);
 
-  const digitalCount = offers.filter((o) => o.media !== "vinyl").length;
-  const vinylCount = offers.filter((o) => o.media === "vinyl").length;
   const exclusive = offers.length === 1;
+  const activeList = tab === "vinyl" ? vinyl : digi;
 
   const visible = useMemo(() => {
-    let list = offers.filter((o) => {
-      if (media === "digital") return o.media !== "vinyl";
-      if (media === "vinyl") return o.media === "vinyl";
-      return true;
-    });
-    list =
+    let list =
       sort === "cheap"
-        ? rankOffers(list)
-        : [...list].sort((a, b) =>
+        ? rankOffers(activeList)
+        : [...activeList].sort((a, b) =>
             storeName(a.storeId).localeCompare(storeName(b.storeId), "it"),
           );
-
     if (sort === "cheap" && cheapBias < 100 && list.length > 1) {
-      // Tendina: più basso = mostra solo la fascia economica (min 2, max tutti)
       const keep = Math.max(2, Math.ceil((list.length * cheapBias) / 100));
       list = list.slice(0, keep);
     }
     return list;
-  }, [offers, media, sort, cheapBias]);
+  }, [activeList, sort, cheapBias]);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" id="buy">
       <div>
-        <h2 className="font-display text-lg font-black text-mist">
-          Dove comprare — senza perdere tempo
-        </h2>
+        <h2 className="font-display text-lg font-black text-mist">Dove comprare</h2>
         <p className="mt-1 text-sm text-soft">
-          Solo digitale o solo vinile. Ordina dal più economico. Discogs mostra il minimo «da …
-          + spedizione» e apre le scelte seller.
+          Digitale e vinile sono separati — clicca <strong className="text-mist">Vinyl</strong>{" "}
+          per vedere disco + spedizione.
         </p>
       </div>
 
+      {/* Tab cliccabili: mai prezzi misti nella stessa lista */}
+      <div
+        className="flex gap-1 rounded-dig-lg border border-line bg-panel p-1"
+        role="tablist"
+        aria-label="Formato"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "digital"}
+          onClick={() => setTab("digital")}
+          className={`flex-1 rounded-dig px-4 py-3 text-sm font-bold transition ${
+            tab === "digital"
+              ? "bg-signal text-ink"
+              : "text-muted hover:text-mist"
+          }`}
+        >
+          Digital
+          <span className="ml-2 text-[0.65rem] font-semibold opacity-80">
+            {digi.length}
+          </span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={tab === "vinyl"}
+          disabled={vinyl.length === 0}
+          onClick={() => vinyl.length > 0 && setTab("vinyl")}
+          className={`flex-1 rounded-dig px-4 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-35 ${
+            tab === "vinyl"
+              ? "bg-signal text-ink"
+              : "text-muted hover:text-mist"
+          }`}
+        >
+          Vinyl
+          <span className="ml-2 text-[0.65rem] font-semibold opacity-80">
+            {vinyl.length}
+          </span>
+        </button>
+      </div>
+
+      {tab === "vinyl" ? (
+        <p className="text-sm text-soft">
+          Solo vinile: prezzo disco + spedizione (es.{" "}
+          <span className="text-mist">da 12,90 € + 8,00 € spedizione</span> su Discogs).
+        </p>
+      ) : (
+        <p className="text-sm text-soft">
+          Solo digitale: Beatport, Bandcamp, Traxsource… ordinati dal più economico.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
-        {(
-          [
-            ["all", `Tutto (${offers.length})`],
-            ["digital", `Solo digitale (${digitalCount})`],
-            ["vinyl", `Solo vinile (${vinylCount})`],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setMedia(id)}
-            disabled={id === "vinyl" && vinylCount === 0}
-            className={`rounded-dig px-3 py-2 text-[0.7rem] font-bold uppercase tracking-wider transition disabled:opacity-40 ${
-              media === id
-                ? "bg-signal text-ink"
-                : "border border-line text-muted hover:border-signal hover:text-signal"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-        <span className="mx-1 hidden h-6 w-px bg-line sm:block" aria-hidden />
         <button
           type="button"
           onClick={() => setSort("cheap")}
@@ -246,22 +263,20 @@ export function StoreOffers({ offers }: Props) {
             onChange={(e) => setCheapBias(Number(e.target.value))}
             className="mt-2 w-full accent-[var(--accent,#5fd4a8)]"
           />
-          <span className="mt-1 flex justify-between text-[0.65rem] text-muted">
-            <span>Solo i più bassi</span>
-            <span>Mostra tutto</span>
-          </span>
         </label>
       ) : null}
 
       {visible.length === 0 ? (
         <p className="rounded-dig-lg border border-line bg-panel px-4 py-8 text-sm text-muted">
-          Nessuna offerta in questo filtro.
+          {tab === "vinyl"
+            ? "Nessun vinile listato per questa traccia."
+            : "Nessuna offerta digitale."}
         </p>
       ) : (
         <ul className="divide-y divide-line border-y border-line">
           {visible.map((offer, i) => (
             <OfferRow
-              key={`${offer.storeId}-${offer.media}-${offer.format}-${i}`}
+              key={`${tab}-${offer.storeId}-${offer.format}-${i}`}
               offer={offer}
               best={i === 0 && sort === "cheap"}
               exclusive={exclusive}
@@ -270,20 +285,6 @@ export function StoreOffers({ offers }: Props) {
           ))}
         </ul>
       )}
-
-      {media !== "vinyl" && digitalCount > 1 ? (
-        <p className="text-xs text-muted">
-          Digitale: ogni riga = uno store con prezzo vicino (o «Vedi store» se lo store non
-          lista il prezzo in API). Gratis in cima.
-        </p>
-      ) : null}
-      {media !== "digital" && vinylCount > 0 ? (
-        <p className="text-xs text-muted">
-          Vinile: disco + spedizione subito. Discogs ={" "}
-          <span className="text-mist">da {formatPrice(12)} + {formatPrice(8)} spedizione</span>{" "}
-          in su, link alle scelte seller.
-        </p>
-      ) : null}
     </div>
   );
 }
