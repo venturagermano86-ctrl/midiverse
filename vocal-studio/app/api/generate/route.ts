@@ -1,116 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
-import { spawn } from "child_process";
 import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import { getGenre, getVariation } from "@/lib/genres";
 import { clampBpm, pitchNudgeForKey } from "@/lib/keys";
 import { getSinger } from "@/lib/singers";
+import { fetchOEmbed, isAllowedMediaUrl, normalizeMediaUrl } from "@/lib/youtube";
+import { analyzeFromMeta } from "@/lib/mood";
+import { mixPhrasesToMp3, ttsPhrase } from "@/lib/tts-node";
 
 export const runtime = "nodejs";
-export const maxDuration = 180;
+export const maxDuration = 60;
 
-type PyResult = { wav: string; mp3: string; analysis?: Record<string, unknown> };
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
+const MAX_LENGTH_SEC = 48;
 
-function runPython(configPath: string, outWav: string, bedWav: string) {
-  return new Promise<PyResult>((resolve, reject) => {
-    const script = path.join(process.cwd(), "scripts", "generate_vocal.py");
-    const proc = spawn(
-      "python3",
-      [script, "--config", configPath, "--out", outWav, "--bed-out", bedWav],
-      {
-        env: {
-          ...process.env,
-          PATH: `${process.env.HOME}/.local/bin:${process.env.HOME}/.deno/bin:${process.env.PATH || ""}`,
-        },
-        cwd: path.join(process.cwd(), "scripts"),
-      }
-    );
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d) => (stdout += d.toString()));
-    proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("close", (code) => {
-      if (code !== 0) {
-        reject(new Error(stderr || `python exited ${code}`));
-        return;
-      }
-      try {
-        const line = stdout.trim().split("\n").filter(Boolean).pop() || "{}";
-        resolve(JSON.parse(line));
-      } catch {
-        resolve({ wav: outWav, mp3: outWav.replace(/\.wav$/, ".mp3") });
-      }
-    });
-  });
-}
-
-type FetchResult = {
-  ok: boolean;
-  trackPath?: string;
-  analysis?: Record<string, unknown>;
-  meta?: { title?: string; author?: string };
-  error?: string;
-  fallback?: string;
-};
-
-function fetchReferenceUrl(url: string, outDir: string) {
-  return new Promise<FetchResult>((resolve, reject) => {
-    const script = path.join(process.cwd(), "scripts", "fetch_reference_url.py");
-    const proc = spawn(
-      "python3",
-      [script, "--url", url, "--out-dir", outDir],
-      {
-        env: {
-          ...process.env,
-          PATH: `${process.env.HOME}/.local/bin:${process.env.HOME}/.deno/bin:${process.env.PATH || ""}`,
-        },
-        cwd: path.join(process.cwd(), "scripts"),
-      }
-    );
-    let stdout = "";
-    let stderr = "";
-    proc.stdout.on("data", (d) => (stdout += d.toString()));
-    proc.stderr.on("data", (d) => (stderr += d.toString()));
-    proc.on("close", (code) => {
-      try {
-        const line = stdout.trim().split("\n").filter(Boolean).pop() || "{}";
-        const data = JSON.parse(line) as FetchResult;
-        if (!data.ok && code !== 0) {
-          reject(new Error(data.error || stderr || "Fetch URL fallito"));
-          return;
-        }
-        resolve(data);
-      } catch {
-        reject(new Error(stderr || "Fetch URL fallito"));
-      }
-    });
-  });
-}
-
-function looksLikeMediaUrl(raw: string) {
-  try {
-    const u = new URL(raw.trim().startsWith("http") ? raw.trim() : `https://${raw.trim()}`);
-    const host = u.hostname.replace(/^www\./, "").toLowerCase();
-    return (
-      host.includes("youtube.com") ||
-      host === "youtu.be" ||
-      host.includes("soundcloud.com") ||
-      host.includes("youtu.be")
-    );
-  } catch {
-    return false;
-  }
+function safeClientError(fallback: string): string {
+  return fallback;
 }
 
 export async function POST(req: NextRequest) {
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vocal-studio-"));
   try {
     const form = await req.formData();
     const genreId = String(form.get("genreId") || "");
     const variationId = String(form.get("variationId") || "");
-    const lengthSec = Number(form.get("lengthSec") || 32);
+    const lengthSec = Math.min(
+      MAX_LENGTH_SEC,
+      Math.max(12, Number(form.get("lengthSec") || 32))
+    );
     const mode = String(form.get("mode") || "generate");
-    const sourceUrl = String(form.get("sourceUrl") || "").trim();
+    const sourceUrlRaw = String(form.get("sourceUrl") || "").trim();
     const bpmRaw = form.get("bpm");
     const keyId = String(form.get("key") || "Am").trim() || "Am";
     const singerId = String(form.get("singerId") || "house-soul-f").trim();
@@ -123,49 +43,80 @@ export async function POST(req: NextRequest) {
     const variation = getVariation(genreId, variationId);
 
     if (mode !== "reference" && !variation) {
-      return NextResponse.json({ error: "Genere o variazione non validi" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Genere o variazione non validi" },
+        { status: 400 }
+      );
     }
 
-    const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vocal-studio-"));
     let trackPath = "";
-    let analysisFromUrl: Record<string, unknown> | undefined;
+    let analysis: Record<string, unknown> | undefined;
 
     const file = form.get("track");
-    if ((mode === "overlay" || mode === "reference") && file && typeof file !== "string") {
+    if (
+      (mode === "overlay" || mode === "reference") &&
+      file &&
+      typeof file !== "string"
+    ) {
       const bytes = Buffer.from(await file.arrayBuffer());
+      if (bytes.length > MAX_UPLOAD_BYTES) {
+        return NextResponse.json(
+          { error: "File troppo grande (max 8 MB)." },
+          { status: 400 }
+        );
+      }
       const safe = (file.name || "track.wav").replace(/[^\w.\-]+/g, "_");
       trackPath = path.join(tmp, safe);
       await fs.writeFile(trackPath, bytes);
+      // Uploaded audio: still use mood from singer + filename seed for phrases
+      analysis = {
+        ...analyzeFromMeta({
+          title: file.name || "upload",
+          author: "",
+          url: `file://${safe}`,
+          bpmHint: userBpm ?? undefined,
+        }),
+        sourceMode: "audio",
+        note: "Mood dal file + cantante scelto — frasi originali.",
+      };
     }
 
-    // YouTube / SoundCloud link (reference or overlay)
-    if (sourceUrl && (mode === "reference" || mode === "overlay") && !trackPath) {
-      if (!looksLikeMediaUrl(sourceUrl)) {
+    // YouTube / SoundCloud — Node oEmbed only (no yt-dlp / no SSRF)
+    if (
+      sourceUrlRaw &&
+      (mode === "reference" || mode === "overlay") &&
+      !trackPath
+    ) {
+      if (!isAllowedMediaUrl(sourceUrlRaw)) {
         return NextResponse.json(
           { error: "Incolla un link YouTube o SoundCloud valido." },
           { status: 400 }
         );
       }
-      const fetched = await fetchReferenceUrl(sourceUrl, path.join(tmp, "urlref"));
-      if (!fetched.ok && !fetched.analysis) {
+      const normalized = normalizeMediaUrl(sourceUrlRaw)!;
+      const meta = await fetchOEmbed(normalized);
+      if (!meta?.title) {
         return NextResponse.json(
           {
             error:
-              fetched.error ||
-              "Non riesco a leggere quel link. Prova a caricare l'MP3 della traccia.",
+              "Non riesco a leggere quel link YouTube. Controlla l’URL o carica un MP3.",
           },
           { status: 400 }
         );
       }
-      if (fetched.trackPath) trackPath = fetched.trackPath;
-      if (fetched.analysis) analysisFromUrl = fetched.analysis;
+      analysis = analyzeFromMeta({
+        title: meta.title,
+        author: meta.author,
+        url: normalized,
+        bpmHint: userBpm ?? undefined,
+      });
     }
 
-    if (mode === "reference" && !trackPath && !analysisFromUrl) {
+    if (mode === "reference" && !analysis) {
       return NextResponse.json(
         {
           error:
-            "Incolla un link YouTube (o SoundCloud), oppure carica la traccia col vocal che ti piace.",
+            "Incolla un link YouTube (o SoundCloud), oppure carica la traccia.",
         },
         { status: 400 }
       );
@@ -173,95 +124,118 @@ export async function POST(req: NextRequest) {
 
     if (mode === "overlay" && !trackPath) {
       return NextResponse.json(
-        { error: "Carica la tua traccia (o un link se scaricabile) per aggiungere il vocal." },
+        { error: "Carica la tua traccia per aggiungere il vocal." },
         { status: 400 }
       );
     }
 
-    // Prefer user BPM; else analysis; else genre mid hint; else 124
     const genre = getGenre(genreId);
     const genreMid = genre
       ? Math.round((genre.bpmHint[0] + genre.bpmHint[1]) / 2)
       : 124;
-    const defaultBpm =
+    const bpm =
       userBpm ??
-      (typeof analysisFromUrl?.bpm === "number"
-        ? clampBpm(analysisFromUrl.bpm as number)
+      (typeof analysis?.bpm === "number"
+        ? clampBpm(analysis.bpm as number)
         : genreMid);
 
-    // Singer preset drives voice; genre variation still supplies phrases when not reference
-    const baseRate =
-      (mode === "reference"
-        ? Number(analysisFromUrl?.rate ?? singer.rate)
-        : singer.rate) + keyNudge.rateNudge;
-    const basePitch =
-      (mode === "reference"
-        ? Number(analysisFromUrl?.pitchHz ?? singer.pitchHz)
-        : singer.pitchHz) + keyNudge.pitchHz;
+    const dryPhrases =
+      (analysis?.dry as string[] | undefined) ||
+      variation?.phrases.dry ||
+      ["hold the mark", "spin the gate"];
+    const wetPhrases =
+      (analysis?.wet as string[] | undefined) ||
+      variation?.phrases.wet ||
+      ["don't let go", "open it wide"];
 
-    if (analysisFromUrl) {
-      analysisFromUrl = {
-        ...analysisFromUrl,
-        key: keyId,
-        ...(userBpm ? { bpm: userBpm } : {}),
-        pitchHz: Number(analysisFromUrl.pitchHz ?? singer.pitchHz) + keyNudge.pitchHz,
-        rate: Number(analysisFromUrl.rate ?? singer.rate) + keyNudge.rateNudge,
-        dsp: analysisFromUrl.dsp || singer.dsp,
-        singerId: singer.id,
-      };
+    const rate =
+      (typeof analysis?.rate === "number" ? (analysis.rate as number) : singer.rate) +
+      keyNudge.rateNudge;
+    const pitchHz =
+      (typeof analysis?.pitchHz === "number"
+        ? (analysis.pitchHz as number)
+        : singer.pitchHz) + keyNudge.pitchHz;
+    const edgeDry =
+      (analysis?.voice as string | undefined) || singer.edgeVoice || "jenny";
+    const edgeWet =
+      (analysis?.wetVoice as string | undefined) || singer.edgeVoice || "aria";
+
+    const dryFiles: string[] = [];
+    const wetFiles: string[] = [];
+    let engine: "elevenlabs" | "edge" = "edge";
+
+    for (let i = 0; i < Math.min(2, dryPhrases.length); i++) {
+      const dest = path.join(tmp, `dry${i}.mp3`);
+      const used = await ttsPhrase({
+        text: dryPhrases[i],
+        edgeVoice: edgeDry,
+        rate,
+        pitchHz,
+        dest,
+        elevenVoiceId: singer.elevenVoiceId,
+      });
+      if (used === "elevenlabs") engine = "elevenlabs";
+      dryFiles.push(dest);
+    }
+    for (let i = 0; i < Math.min(2, wetPhrases.length); i++) {
+      const dest = path.join(tmp, `wet${i}.mp3`);
+      await ttsPhrase({
+        text: wetPhrases[i],
+        edgeVoice: edgeWet,
+        rate: rate - 2,
+        pitchHz: pitchHz - 3,
+        dest,
+        elevenVoiceId: singer.elevenVoiceId,
+      });
+      wetFiles.push(dest);
     }
 
-    const config = {
-      mode,
-      lengthSec: Math.min(90, Math.max(12, lengthSec)),
-      bpm: defaultBpm,
-      userBpm: userBpm ?? undefined,
+    const outMp3 = path.join(tmp, "mix.mp3");
+    await mixPhrasesToMp3({
+      dryFiles,
+      wetFiles,
+      bpm,
+      lengthSec,
+      outMp3,
+    });
+
+    const mp3 = await fs.readFile(outMp3);
+    const payloadAnalysis = {
+      ...(analysis || {}),
+      bpm,
       key: keyId,
-      voice: singer.edgeVoice || variation?.voice || "jenny",
-      wetVoice: variation?.voice || singer.edgeVoice,
-      rate: baseRate,
-      pitchHz: basePitch,
-      dsp: singer.dsp,
-      dry: variation?.phrases.dry || ["hold the mark"],
-      wet: variation?.phrases.wet || ["don't let go"],
-      elevenVoiceId: singer.elevenVoiceId,
-      elevenWetVoiceId: singer.elevenVoiceId,
-      singerLabel: singer.label,
+      label: (analysis?.label as string) || singer.label,
       singerId: singer.id,
-      trackPath,
-      analysis: analysisFromUrl || undefined,
+      engine,
+      dry: dryPhrases,
+      wet: wetPhrases,
+      note:
+        engine === "elevenlabs"
+          ? "Motore cantante AI (ElevenLabs) — voci con licenza."
+          : (analysis?.note as string) ||
+            "Demo edge-tts. Aggiungi ELEVENLABS_API_KEY per voci cantante reali.",
     };
-    const configPath = path.join(tmp, "config.json");
-    const outWav = path.join(tmp, "mix.wav");
-    const bedWav = path.join(tmp, "vocal.wav");
-    await fs.writeFile(configPath, JSON.stringify(config));
-
-    const result = await runPython(configPath, outWav, bedWav);
-    const mp3Path = result.mp3 || outWav.replace(/\.wav$/, ".mp3");
-    const mp3 = await fs.readFile(mp3Path);
-
-    const analysis = result.analysis || analysisFromUrl || null;
-    fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
 
     return new NextResponse(mp3, {
       status: 200,
       headers: {
         "Content-Type": "audio/mpeg",
         "Content-Disposition": `attachment; filename="vocal-studio-${mode}.mp3"`,
-        "X-Vocal-Analysis": analysis
-          ? encodeURIComponent(JSON.stringify(analysis))
-          : "",
+        "X-Vocal-Analysis": encodeURIComponent(JSON.stringify(payloadAnalysis)),
         "Cache-Control": "no-store",
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Generazione fallita";
+    console.error("[vocal-studio/generate]", err instanceof Error ? err.message : err);
     return NextResponse.json(
       {
-        error: message,
-        hint: "Incolla un link YouTube o carica un file. Mood dal riferimento, frasi originali.",
+        error: safeClientError(
+          "Generazione fallita. Riprova col link YouTube o carica un MP3."
+        ),
       },
       { status: 500 }
     );
+  } finally {
+    fs.rm(tmp, { recursive: true, force: true }).catch(() => {});
   }
 }
