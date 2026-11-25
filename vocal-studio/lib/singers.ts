@@ -1,7 +1,7 @@
 /**
- * AI singer styles — licensed/generic library voices, NOT celebrity clones.
- * ElevenLabs voice IDs are public library defaults; overridden when the account
- * has custom voices.
+ * AI singer styles for commercial track releases.
+ * Uses ElevenLabs Voice Library IDs (generic/licensed voices) — NOT celebrity clones.
+ * Commercial use requires a paid ElevenLabs plan (their ToS). Free/demo TTS is preview-only.
  */
 export type SingerPreset = {
   id: string;

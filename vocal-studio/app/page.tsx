@@ -126,11 +126,11 @@ export default function VocalStudioPage() {
           Vocal Studio
         </h1>
         <p className="mt-4 max-w-lg text-[1.02rem] leading-relaxed text-mute">
-          Genera vocal da{" "}
-          <em className="text-ink not-italic">cantanti AI</em> (voci con
-          licenza) — stile house/soul/minimal. Non cloniamo star famose senza
-          diritti: i reel che vedi usano API a pagamento; qui colleghiamo lo
-          stesso tipo di motore.
+          Vocal per le tue tracce,{" "}
+          <em className="text-ink not-italic">usabili in release</em> con
+          cantanti AI con licenza commerciale (ElevenLabs piano a pagamento).
+          Niente cloni di star famose — così puoi pubblicare senza casino sui
+          diritti.
         </p>
       </header>
 
@@ -155,8 +155,10 @@ export default function VocalStudioPage() {
             ))}
           </div>
           <p className="mt-2 text-[0.75rem] text-mute">
-            Con ElevenLabs attivo = voce cantante reale. Senza chiave = demo
-            parlata (edge-tts).
+            Per release / Beatport / streaming: serve{" "}
+            <span className="text-ink">ELEVENLABS_API_KEY</span> su piano a
+            pagamento (licenza commerciale). Senza chiave = solo anteprima demo,
+            non pubblicabile.
           </p>
         </div>
 
@@ -415,6 +417,17 @@ export default function VocalStudioPage() {
         {analysis && (
           <div className="rounded-2xl border border-surface-border bg-surface p-4 text-sm">
             <h2 className="font-semibold">Cosa abbiamo sentito</h2>
+            <p
+              className={`mt-2 text-[0.8rem] font-medium ${
+                analysis.engine === "elevenlabs"
+                  ? "text-accent"
+                  : "text-red-300/90"
+              }`}
+            >
+              {analysis.engine === "elevenlabs"
+                ? "Licenza commerciale (ElevenLabs) — ok per release se il tuo piano è a pagamento."
+                : "Solo anteprima demo — non usare in tracce da pubblicare."}
+            </p>
             {(analysis.sourceTitle || analysis.sourceAuthor) && (
               <p className="mt-2 text-mute">
                 Riferimento:{" "}
@@ -471,9 +484,9 @@ export default function VocalStudioPage() {
       </section>
 
       <footer className="mt-14 text-[0.75rem] leading-relaxed text-mute">
-        Cantanti AI con licenza (ElevenLabs) quando la chiave è attiva; altrimenti
-        demo. Non cloniamo cantanti famosi senza diritti — stesso tipo di motore
-        dei reel, ma voci originali usabili in produzione.
+        Release-safe = voci ElevenLabs su piano a pagamento (termini ElevenLabs).
+        Demo senza chiave = solo prova. Non cloniamo cantanti famosi: così il
+        vocal resta originale e pubblicabile.
       </footer>
     </main>
   );

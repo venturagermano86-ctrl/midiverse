@@ -5,21 +5,47 @@ import os from "os";
 import { getGenre, getVariation } from "@/lib/genres";
 import { clampBpm, pitchNudgeForKey } from "@/lib/keys";
 import { getSinger } from "@/lib/singers";
-import { fetchOEmbed, isAllowedMediaUrl, normalizeMediaUrl } from "@/lib/youtube";
+import {
+  fetchOEmbed,
+  isAllowedMediaUrl,
+  normalizeMediaUrl,
+} from "@/lib/youtube";
 import { analyzeFromMeta } from "@/lib/mood";
-import { mixPhrasesToMp3, ttsPhrase } from "@/lib/tts-node";
+import { synthesizeVocalMp3 } from "@/lib/tts-node";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-const MAX_UPLOAD_BYTES = 8 * 1024 * 1024; // 8 MB
-const MAX_LENGTH_SEC = 48;
+const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
+const MAX_LENGTH_SEC = 32;
+const ALLOWED_MODES = new Set(["generate", "overlay", "reference"]);
 
-function safeClientError(fallback: string): string {
-  return fallback;
+/** Tiny in-memory rate limit (per isolate). */
+const hits = new Map<string, { n: number; reset: number }>();
+function rateLimit(key: string, limit = 8, windowMs = 60_000): boolean {
+  const now = Date.now();
+  const cur = hits.get(key);
+  if (!cur || now > cur.reset) {
+    hits.set(key, { n: 1, reset: now + windowMs });
+    return true;
+  }
+  if (cur.n >= limit) return false;
+  cur.n += 1;
+  return true;
 }
 
 export async function POST(req: NextRequest) {
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    "anon";
+  if (!rateLimit(ip)) {
+    return NextResponse.json(
+      { error: "Troppe richieste — aspetta un minuto." },
+      { status: 429 }
+    );
+  }
+
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "vocal-studio-"));
   try {
     const form = await req.formData();
@@ -27,9 +53,10 @@ export async function POST(req: NextRequest) {
     const variationId = String(form.get("variationId") || "");
     const lengthSec = Math.min(
       MAX_LENGTH_SEC,
-      Math.max(12, Number(form.get("lengthSec") || 32))
+      Math.max(12, Number(form.get("lengthSec") || 32) || 32)
     );
-    const mode = String(form.get("mode") || "generate");
+    const modeRaw = String(form.get("mode") || "generate");
+    const mode = ALLOWED_MODES.has(modeRaw) ? modeRaw : "generate";
     const sourceUrlRaw = String(form.get("sourceUrl") || "").trim();
     const bpmRaw = form.get("bpm");
     const keyId = String(form.get("key") || "Am").trim() || "Am";
@@ -49,8 +76,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let trackPath = "";
     let analysis: Record<string, unknown> | undefined;
+    let hasUpload = false;
 
     const file = form.get("track");
     if (
@@ -65,10 +92,8 @@ export async function POST(req: NextRequest) {
           { status: 400 }
         );
       }
+      hasUpload = true;
       const safe = (file.name || "track.wav").replace(/[^\w.\-]+/g, "_");
-      trackPath = path.join(tmp, safe);
-      await fs.writeFile(trackPath, bytes);
-      // Uploaded audio: still use mood from singer + filename seed for phrases
       analysis = {
         ...analyzeFromMeta({
           title: file.name || "upload",
@@ -81,11 +106,10 @@ export async function POST(req: NextRequest) {
       };
     }
 
-    // YouTube / SoundCloud — Node oEmbed only (no yt-dlp / no SSRF)
     if (
       sourceUrlRaw &&
       (mode === "reference" || mode === "overlay") &&
-      !trackPath
+      !hasUpload
     ) {
       if (!isAllowedMediaUrl(sourceUrlRaw)) {
         return NextResponse.json(
@@ -122,7 +146,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (mode === "overlay" && !trackPath) {
+    if (mode === "overlay" && !hasUpload) {
       return NextResponse.json(
         { error: "Carica la tua traccia per aggiungere il vocal." },
         { status: 400 }
@@ -148,55 +172,23 @@ export async function POST(req: NextRequest) {
       variation?.phrases.wet ||
       ["don't let go", "open it wide"];
 
-    const rate =
-      (typeof analysis?.rate === "number" ? (analysis.rate as number) : singer.rate) +
-      keyNudge.rateNudge;
-    const pitchHz =
-      (typeof analysis?.pitchHz === "number"
-        ? (analysis.pitchHz as number)
-        : singer.pitchHz) + keyNudge.pitchHz;
-    const edgeDry =
-      (analysis?.voice as string | undefined) || singer.edgeVoice || "jenny";
-    const edgeWet =
-      (analysis?.wetVoice as string | undefined) || singer.edgeVoice || "aria";
+    // Prefer shorter, cleaner phrases for HTTPS demo TTS (no elongated vowels)
+    const clean = (s: string) =>
+      s.replace(/(.)\1{2,}/g, "$1$1").replace(/\s+/g, " ").trim();
+    const dry = dryPhrases.map(clean).slice(0, 2);
+    const wet = wetPhrases.map(clean).slice(0, 2);
 
-    const dryFiles: string[] = [];
-    const wetFiles: string[] = [];
-    let engine: "elevenlabs" | "edge" = "edge";
-
-    for (let i = 0; i < Math.min(2, dryPhrases.length); i++) {
-      const dest = path.join(tmp, `dry${i}.mp3`);
-      const used = await ttsPhrase({
-        text: dryPhrases[i],
-        edgeVoice: edgeDry,
-        rate,
-        pitchHz,
-        dest,
-        elevenVoiceId: singer.elevenVoiceId,
-      });
-      if (used === "elevenlabs") engine = "elevenlabs";
-      dryFiles.push(dest);
-    }
-    for (let i = 0; i < Math.min(2, wetPhrases.length); i++) {
-      const dest = path.join(tmp, `wet${i}.mp3`);
-      await ttsPhrase({
-        text: wetPhrases[i],
-        edgeVoice: edgeWet,
-        rate: rate - 2,
-        pitchHz: pitchHz - 3,
-        dest,
-        elevenVoiceId: singer.elevenVoiceId,
-      });
-      wetFiles.push(dest);
-    }
+    void keyNudge;
+    void bpm;
 
     const outMp3 = path.join(tmp, "mix.mp3");
-    await mixPhrasesToMp3({
-      dryFiles,
-      wetFiles,
-      bpm,
+    const engine = await synthesizeVocalMp3({
+      dry,
+      wet,
       lengthSec,
-      outMp3,
+      dest: outMp3,
+      elevenVoiceId: singer.elevenVoiceId,
+      edgeVoice: singer.edgeVoice,
     });
 
     const mp3 = await fs.readFile(outMp3);
@@ -206,14 +198,14 @@ export async function POST(req: NextRequest) {
       key: keyId,
       label: (analysis?.label as string) || singer.label,
       singerId: singer.id,
-      engine,
-      dry: dryPhrases,
-      wet: wetPhrases,
+      engine: engine === "elevenlabs" ? "elevenlabs" : "demo-https",
+      dry,
+      wet,
       note:
         engine === "elevenlabs"
-          ? "Motore cantante AI (ElevenLabs) — voci con licenza."
-          : (analysis?.note as string) ||
-            "Demo edge-tts. Aggiungi ELEVENLABS_API_KEY per voci cantante reali.",
+          ? "Voce ElevenLabs — usabile in release con piano a pagamento (termini ElevenLabs)."
+          : "Anteprima demo — NON pubblicare su label/Beatport/streaming. Aggiungi ELEVENLABS_API_KEY (piano a pagamento).",
+      releaseReady: engine === "elevenlabs",
     };
 
     return new NextResponse(mp3, {
@@ -226,12 +218,14 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    console.error("[vocal-studio/generate]", err instanceof Error ? err.message : err);
+    console.error(
+      "[vocal-studio/generate]",
+      err instanceof Error ? err.message : err
+    );
     return NextResponse.json(
       {
-        error: safeClientError(
-          "Generazione fallita. Riprova col link YouTube o carica un MP3."
-        ),
+        error:
+          "Generazione fallita. Riprova col link YouTube o carica un MP3.",
       },
       { status: 500 }
     );
