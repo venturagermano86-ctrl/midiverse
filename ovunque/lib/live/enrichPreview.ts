@@ -79,7 +79,7 @@ export async function lookupPreview(
     }
     if (!match?.previewUrl) {
       const fallback = await itunesSearch("deep house techno", 6);
-      match = fallback.find((h) => !!h.previewUrl) ?? null;
+      match = fallback.find((h) => !!h.previewUrl) || match;
     }
     if (!match?.previewUrl) return null;
     return { previewUrl: match.previewUrl, artworkUrl: match.artworkUrl };
