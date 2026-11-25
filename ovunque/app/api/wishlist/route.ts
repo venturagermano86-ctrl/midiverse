@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireIdentity } from "../../../cursor/identity";
-import type { Track } from "@/lib/types";
+import { sanitizeTrack } from "@/lib/sanitizeTrack";
 import {
   listWishlist,
   removeFromWishlist,
@@ -10,11 +10,17 @@ import {
 
 export const dynamic = "force-dynamic";
 
+const MAX_BODY_BYTES = 32_000;
+
 async function personSub(request: Request) {
   const identity = await requireIdentity(request);
   if (identity instanceof Response) return identity;
   if (identity.kind !== "person") {
     return NextResponse.json({ error: "person_required" }, { status: 403 });
+  }
+  // Preview host tokens stay out of production wishlist data
+  if (identity.stage === "preview") {
+    return NextResponse.json({ error: "preview_stage_blocked" }, { status: 403 });
   }
   return identity;
 }
@@ -36,13 +42,19 @@ export async function GET(request: Request) {
   return NextResponse.json(
     {
       count: rows.length,
-      items: rows.map((r) => ({
-        ...r,
-        track:
+      items: rows.map((r) => {
+        const parsed =
           typeof r.track_json === "string"
-            ? (JSON.parse(r.track_json) as Track)
-            : r.track_json,
-      })),
+            ? JSON.parse(r.track_json)
+            : r.track_json;
+        const track = sanitizeTrack(parsed);
+        return {
+          ...r,
+          artwork_url: track?.artworkUrl ?? null,
+          preview_url: track?.previewUrl ?? null,
+          track,
+        };
+      }),
     },
     { headers: { "cache-control": "private, no-store" } },
   );
@@ -52,11 +64,24 @@ export async function POST(request: Request) {
   const identity = await personSub(request);
   if (identity instanceof Response) return identity;
 
-  const body = (await request.json()) as { track?: Track };
-  if (!body.track?.id || !body.track.title || !body.track.artist) {
-    return NextResponse.json({ error: "track_required" }, { status: 400 });
+  const raw = await request.text();
+  if (raw.length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: "body_too_large" }, { status: 413 });
   }
-  await saveToWishlist(identity.sub, body.track);
+
+  let body: { track?: unknown };
+  try {
+    body = JSON.parse(raw) as { track?: unknown };
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
+
+  const track = sanitizeTrack(body.track);
+  if (!track) {
+    return NextResponse.json({ error: "track_invalid" }, { status: 400 });
+  }
+
+  await saveToWishlist(identity.sub, track);
   const ids = await wishlistIds(identity.sub);
   return NextResponse.json(
     { ok: true, ids },
@@ -70,7 +95,7 @@ export async function DELETE(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const trackId = searchParams.get("trackId");
-  if (!trackId) {
+  if (!trackId || trackId.length > 120) {
     return NextResponse.json({ error: "trackId_required" }, { status: 400 });
   }
   await removeFromWishlist(identity.sub, trackId);
