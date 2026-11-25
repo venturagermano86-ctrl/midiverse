@@ -45,7 +45,7 @@ function DigListResults() {
         setTracks(data.tracks ?? []);
         setNote(
           data.note ||
-            "Dig list · affinità a croce (collector / co-wishlist), non solo genere",
+            "Diglist: acquirenti dei pick × le loro collezioni (incrocio), non genere",
         );
       } catch {
         if (!cancelled) setError("Offline — riprova.");

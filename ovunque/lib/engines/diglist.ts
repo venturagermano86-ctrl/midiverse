@@ -1,6 +1,12 @@
 import type { Track } from "../types";
+import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
-import { rankByAffinity, type AffinityHit } from "./affinity";
+import {
+  crossBuyersCollections,
+  resolveTracksById,
+  type BuyerCollection,
+  type CroceHit,
+} from "./diglistBuyers";
 
 export type DigMode = "short" | "long";
 
@@ -10,62 +16,82 @@ const LIMITS: Record<DigMode, number> = {
 };
 
 /**
- * Short / Long list stile diglist.midivrs.com:
- * affinità "a croce" (collector / co-wishlist), NON solo genere.
+ * Short / Long stile diglist.midivrs.com:
+ * acquirenti dei pick × le loro collezioni → incrocio (croce).
+ * NON ranking per genere.
  */
 export function buildDigList(
   seeds: Track[],
   extras: Track[],
   mode: DigMode,
-  coWish: Track[] = [],
-): { mode: DigMode; tracks: Track[]; note: string; affinity: AffinityHit[] } {
+  realBuyers: BuyerCollection[] = [],
+): {
+  mode: DigMode;
+  tracks: Track[];
+  note: string;
+  croci: CroceHit[];
+  method: string;
+} {
   const picked = seeds.slice(0, 6);
   const limit = LIMITS[mode];
 
-  // Co-wishlist community = croci reali (chi ha i pick ha anche queste)
-  const boostedExtras = [...coWish, ...extras];
-  const affinity = rankByAffinity(picked, boostedExtras, limit);
+  const croci = crossBuyersCollections(picked, realBuyers);
+  const rankedIds = croci.slice(0, limit).map((c) => c.trackId);
+  let tracks = resolveTracksById(rankedIds, extras);
 
-  // Se co-wish ha seed_hits multipli, forza in cima
-  const byId = new Map(affinity.map((h) => [h.track.id, h]));
-  for (const t of coWish) {
-    const prev = byId.get(t.id);
-    if (prev) {
-      prev.score += 60;
-      prev.croce = Math.max(prev.croce, 2);
-      prev.reasons = [
-        "croce wishlist community",
-        ...prev.reasons.filter((r) => !r.startsWith("croce")),
-      ].slice(0, 3);
+  // Se pochi risultati catalogo, completa SOLO con extras che hanno stesso artista di un seed
+  // (mai dump genere iTunes)
+  if (tracks.length < limit) {
+    const seedArtists = new Set(picked.map((s) => s.artist.toLowerCase()));
+    const have = new Set(tracks.map((t) => t.id));
+    for (const t of extras) {
+      if (have.has(t.id)) continue;
+      if (!seedArtists.has(t.artist.toLowerCase())) continue;
+      tracks.push(t);
+      have.add(t.id);
+      if (tracks.length >= limit) break;
     }
   }
 
-  const ranked = Array.from(byId.values())
-    .sort((a, b) => b.croce - a.croce || b.score - a.score)
-    .slice(0, limit);
+  // Ultimo riempimento: stessa label dei pick (segnale digger, non genere)
+  if (tracks.length < Math.min(6, limit)) {
+    const labels = new Set(
+      picked.map((s) => s.label).filter((l) => l && l !== "—"),
+    );
+    const have = new Set(tracks.map((t) => t.id));
+    for (const t of TRACKS) {
+      if (have.has(t.id) || picked.some((s) => s.id === t.id)) continue;
+      if (!labels.has(t.label)) continue;
+      tracks.push(t);
+      have.add(t.id);
+      if (tracks.length >= limit) break;
+    }
+  }
 
-  const croceN = ranked.filter((h) => h.croce >= 2).length;
+  tracks = tracks.slice(0, limit);
+  const croceForte = croci.filter((c) => c.multiSeedBuyers > 0 || c.seedLinks >= 2).length;
 
   return {
     mode,
-    tracks: ranked.map((h) => h.track),
-    affinity: ranked,
+    tracks,
+    croci: croci.slice(0, limit),
+    method: "diglist-buyers-x-collections",
     note:
       mode === "short"
-        ? `Short list · ${ranked.length} dig affini (${croceN} a croce Diglist) da ${picked.length} pick`
-        : `Long list · ${ranked.length} dig affini (${croceN} a croce) — non solo genere`,
+        ? `Short list · ${tracks.length} dig da incrocio acquirenti×collezioni (${croceForte} a croce)`
+        : `Long list · ${tracks.length} dig da collezioni di chi ha i pick (${croceForte} croci forti)`,
   };
 }
 
 export function digSearchQuery(seeds: Track[]): string {
-  // Query live: artisti dei pick (affinità), non solo tag genere
-  const artists = Array.from(new Set(seeds.map((s) => s.artist).filter(Boolean))).slice(
-    0,
-    3,
-  );
-  if (artists.length) return artists.join(" ");
+  // Per live: titoli specifici dei pick, non genere
+  const parts = seeds
+    .slice(0, 3)
+    .map((s) => `${s.artist} ${s.title}`)
+    .filter(Boolean);
+  if (parts.length) return parts[0];
   const first = seeds[0];
-  if (!first) return "house techno underground";
+  if (!first) return "underground house";
   const g = resolveGenre(first.genre);
   return `${first.artist} ${g.aliases[0] ?? g.name}`;
 }

@@ -147,6 +147,50 @@ export async function coWishlistedWithSeeds(
   });
 }
 
+/** Collezioni per buyer (owner_sub) — input Diglist buyers×collections. */
+export async function buyerCollectionsForSeeds(
+  seedIds: string[],
+): Promise<
+  { buyerId: string; trackIds: Set<string>; seedHits: number }[]
+> {
+  const seeds = seedIds.filter(Boolean).slice(0, 6);
+  if (seeds.length === 0) return [];
+
+  const rows = await sql<{
+    owner_sub: string;
+    track_id: string;
+    is_seed: boolean;
+  }>(
+    `with seed_owners as (
+       select distinct owner_sub
+       from wishlist
+       where track_id = any($1::text[])
+     )
+     select w.owner_sub, w.track_id,
+            (w.track_id = any($1::text[])) as is_seed
+     from wishlist w
+     join seed_owners so on so.owner_sub = w.owner_sub`,
+    [seeds],
+  );
+
+  const map = new Map<string, { trackIds: Set<string>; seedHits: Set<string> }>();
+  for (const r of rows) {
+    let row = map.get(r.owner_sub);
+    if (!row) {
+      row = { trackIds: new Set(), seedHits: new Set() };
+      map.set(r.owner_sub, row);
+    }
+    row.trackIds.add(r.track_id);
+    if (r.is_seed) row.seedHits.add(r.track_id);
+  }
+
+  return Array.from(map.entries()).map(([buyerId, v]) => ({
+    buyerId,
+    trackIds: v.trackIds,
+    seedHits: v.seedHits.size,
+  }));
+}
+
 /**
  * Chart community: più una traccia è in wishlist (utenti distinti), più sale.
  */
