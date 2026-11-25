@@ -22,8 +22,8 @@ const config: Config = {
         "dig-lg": "16px",
       },
       fontFamily: {
-        display: ["Archivo", "system-ui", "sans-serif"],
-        body: ["Archivo", "system-ui", "sans-serif"],
+        display: ["var(--font-archivo)", "Archivo", "system-ui", "sans-serif"],
+        body: ["var(--font-archivo)", "Archivo", "system-ui", "sans-serif"],
       },
       keyframes: {
         rise: {
