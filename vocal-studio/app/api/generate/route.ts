@@ -219,11 +219,12 @@ export async function POST(req: NextRequest) {
       dryVoice: remake.dryVoice,
       wetVoice: remake.wetVoice,
       notes: remake.notes,
-      renderPhrase: async (text, dest, voice) => {
+      renderPhrase: async (text, dest, voice, notes) => {
         const used = await renderPhrase({
           text,
           dest,
           edgeVoice: voice,
+          notes,
         });
         if (used === "elevenlabs") engine = "elevenlabs";
         else if (used === "edge" && engine !== "elevenlabs") engine = "edge";
@@ -250,9 +251,12 @@ export async function POST(req: NextRequest) {
       stems: ["dry", "wet", "mix"],
       mode,
       usedFfmpeg: bundle.usedFfmpeg,
-      note: remake.note,
+      note:
+        engine === "edge"
+          ? "Cantato free: parole su note + stretch/vibrato (Edge). Più umano del parlato Google."
+          : remake.note,
       releaseReady: false,
-      system: "midiverse-remake-v1",
+      system: "midiverse-cantato-v2",
     };
 
     if (wantStems && format === "json") {

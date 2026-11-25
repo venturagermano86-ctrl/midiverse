@@ -236,7 +236,12 @@ export async function buildStemBundle(opts: {
   wetPhrases: string[];
   lengthSec: number;
   workDir: string;
-  renderPhrase: (text: string, dest: string, voice: string) => Promise<void>;
+  renderPhrase: (
+    text: string,
+    dest: string,
+    voice: string,
+    notes: number[]
+  ) => Promise<void>;
   dryVoice: string;
   wetVoice: string;
   notes: number[];
@@ -244,8 +249,8 @@ export async function buildStemBundle(opts: {
   const rawDir = path.join(opts.workDir, "raw");
   await fs.mkdir(rawDir, { recursive: true });
 
-  // Keep rounds low so published hosts stay under timeout
-  const rounds = Math.max(2, Math.min(4, Math.floor(opts.lengthSec / 10)));
+  // Cantato word-by-word is slower — keep rounds tight under host timeout
+  const rounds = Math.max(2, Math.min(3, Math.floor(opts.lengthSec / 14)));
   const dryRaws: string[] = [];
   const wetRaws: string[] = [];
 
@@ -254,8 +259,19 @@ export async function buildStemBundle(opts: {
     const wText = opts.wetPhrases[i % opts.wetPhrases.length];
     const dPath = path.join(rawDir, `dry${i}.mp3`);
     const wPath = path.join(rawDir, `wet${i}.mp3`);
-    await opts.renderPhrase(dText, dPath, opts.dryVoice);
-    await opts.renderPhrase(wText, wPath, opts.wetVoice);
+    // Rotate note window per phrase so each line has a melodic arc
+    const offset = (i * 3) % Math.max(1, opts.notes.length);
+    const slice = [
+      ...opts.notes.slice(offset),
+      ...opts.notes.slice(0, offset),
+    ];
+    await opts.renderPhrase(dText, dPath, opts.dryVoice, slice);
+    await opts.renderPhrase(
+      wText,
+      wPath,
+      opts.wetVoice,
+      slice.map((n) => n + 3)
+    );
     dryRaws.push(dPath);
     wetRaws.push(wPath);
   }

@@ -157,10 +157,8 @@ export default function VocalStudioPage() {
           Vocal Studio
         </h1>
         <p className="mt-4 max-w-lg text-[1.02rem] leading-relaxed text-mute">
-          Dal riferimento → stem dry/wet → remake:{" "}
-          <em className="text-ink not-italic">parole diverse</em>, stessa
-          durata, stesso schema di note, voce leggermente diversa, stesso mood.
-          Senza ElevenLabs.
+          Remake cantato free: ogni parola su una nota, stretch + vibrato —
+          non parlato piatto. Parole diverse, stessa durata/mood, voce vicina.
         </p>
       </header>
 

@@ -24,86 +24,27 @@ const NEIGHBOR_VOICE: Record<string, string> = {
 };
 
 /** Alternate hooks per mood bank — diverse parole, stesso feeling. */
+/** Short open-vowel hooks (2–4 words) — cantabile, not spoken essays. */
 const REMAKE_BANK: Record<string, { dry: string[]; wet: string[] }> = {
   celestial: {
-    dry: [
-      "drift with the tide",
-      "quiet in the blue",
-      "fold into silence",
-      "carry the shimmer",
-      "lean into soft air",
-    ],
-    wet: [
-      "echo in the haze",
-      "pull me under slow",
-      "glow until morning",
-      "whisper through space",
-      "hold this light open",
-    ],
+    dry: ["hold me slow", "take me under", "fall with me", "breathe with me", "stay with me"],
+    wet: ["oh feel you", "pull me close", "soft forever", "call my name", "open wide"],
   },
   soul: {
-    dry: [
-      "stay a little longer",
-      "wrap me in the dark",
-      "bring me back home",
-      "keep this heart warm",
-      "sing me through fire",
-    ],
-    wet: [
-      "never walk away",
-      "love me through rain",
-      "hold on till dawn",
-      "cry it out soft",
-      "take me in close",
-    ],
+    dry: ["hold me closer", "love me slow", "bring me home", "don't leave me", "sing for me"],
+    wet: ["through the night", "I need you", "hold on now", "take me higher", "never let go"],
   },
   club: {
-    dry: [
-      "push the groove hard",
-      "lock into the drop",
-      "ride this bassline",
-      "cut through the night",
-      "hit the floor now",
-    ],
-    wet: [
-      "never stop moving",
-      "turn it up loud",
-      "shake till it breaks",
-      "run with the kick",
-      "burn the whole room",
-    ],
+    dry: ["take me higher", "feel the night", "move with me", "lose control", "hold the mark"],
+    wet: ["don't let go", "all night long", "run with me", "burn it down", "keep me close"],
   },
   cold: {
-    dry: [
-      "steel in the dark",
-      "pulse of the grid",
-      "frozen in motion",
-      "cut the signal clean",
-      "march through concrete",
-    ],
-    wet: [
-      "wire to the core",
-      "shadow on repeat",
-      "break the sequence",
-      "cold light ahead",
-      "no warmth left here",
-    ],
+    dry: ["into the dark", "hold the line", "no way back", "run the night", "cold light"],
+    wet: ["out of time", "break the chain", "find the signal", "shadow call", "steel fire"],
   },
   warm: {
-    dry: [
-      "sun on the skin",
-      "sway with the heat",
-      "palm trees and dust",
-      "rhythm in the sand",
-      "open your chest wide",
-    ],
-    wet: [
-      "fire under feet",
-      "gold in the air",
-      "spin till we melt",
-      "kiss of the drum",
-      "night full of color",
-    ],
+    dry: ["under the sun", "move with me", "sway with me", "love me now", "open your heart"],
+    wet: ["gold in air", "spin with me", "fire tonight", "dance till dawn", "feel alright"],
   },
 };
 
