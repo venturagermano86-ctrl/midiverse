@@ -2,6 +2,7 @@ import Link from "next/link";
 import { GenreGrid } from "@/components/GenreGrid";
 import { HomeCollectionRecs } from "@/components/HomeCollectionRecs";
 import { LiveChartPanel } from "@/components/LiveChartPanel";
+import { ScreenshotDig } from "@/components/ScreenshotDig";
 import { TrackRail } from "@/components/TrackRail";
 import { WaveformStrip } from "@/components/WaveformStrip";
 import { tracksForRail } from "@/lib/catalog";
@@ -72,6 +73,10 @@ export default function HomePage() {
       </section>
 
       <section className="border-b border-line px-4 py-12 md:px-8">
+        <ScreenshotDig />
+      </section>
+
+      <section className="border-b border-line px-4 py-12 md:px-8">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[0.65rem] font-bold uppercase tracking-[0.18em] text-signal">
@@ -81,7 +86,7 @@ export default function HomePage() {
               Charts
             </h2>
             <p className="mt-1 text-sm text-soft">
-              Most wishlisted dalla community · house / minimal underground
+              Most wishlisted · Free downloads · underground — guest ok, login per cronologia
             </p>
           </div>
           <Link

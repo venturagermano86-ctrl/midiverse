@@ -2,6 +2,7 @@
 
 import { Suspense } from "react";
 import { LiveSearch } from "@/components/LiveSearch";
+import { ScreenshotDig } from "@/components/ScreenshotDig";
 
 export default function SearchPage() {
   return (
@@ -14,10 +15,15 @@ export default function SearchPage() {
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-soft">
         Cerca, filtra solo digitale / solo vinile, apri e compra dal più economico — senza
-        perdere tempo.
+        perdere tempo. Oppure carica uno screenshot delle tue preferite.
       </p>
+      <div className="mt-8">
+        <ScreenshotDig />
+      </div>
       <Suspense fallback={<p className="mt-8 text-muted">Carico ricerca…</p>}>
-        <LiveSearch />
+        <div className="mt-12">
+          <LiveSearch />
+        </div>
       </Suspense>
     </main>
   );

@@ -83,6 +83,114 @@ export type WishlistChartHit = {
   track: Track;
 };
 
+export type CoWishHit = {
+  track_id: string;
+  shared_fans: number;
+  seed_hits: number;
+  track: Track;
+};
+
+/**
+ * Diglist "a croce": tracce spesso in wishlist insieme ai seed
+ * (chi ha salvato i pick ha anche salvato queste).
+ */
+export async function coWishlistedWithSeeds(
+  seedIds: string[],
+  limit = 36,
+): Promise<CoWishHit[]> {
+  const seeds = seedIds.filter(Boolean).slice(0, 6);
+  if (seeds.length === 0) return [];
+
+  const rows = await sql<{
+    track_id: string;
+    shared_fans: string | number;
+    seed_hits: string | number;
+    track_json: Track | string;
+  }>(
+    `with seed_owners as (
+       select distinct owner_sub, track_id as seed_id
+       from wishlist
+       where track_id = any($1::text[])
+     ),
+     co as (
+       select w.track_id,
+              count(distinct w.owner_sub)::int as shared_fans,
+              count(distinct so.seed_id)::int as seed_hits,
+              (array_agg(w.track_json order by w.saved_at desc))[1] as track_json
+       from wishlist w
+       join seed_owners so on so.owner_sub = w.owner_sub
+       where w.track_id <> all($1::text[])
+       group by w.track_id
+     )
+     select track_id, shared_fans, seed_hits, track_json
+     from co
+     order by seed_hits desc, shared_fans desc
+     limit $2`,
+    [seeds, limit],
+  );
+
+  return rows.map((r) => {
+    const track =
+      typeof r.track_json === "string"
+        ? (JSON.parse(r.track_json) as Track)
+        : r.track_json;
+    return {
+      track_id: r.track_id,
+      shared_fans: Number(r.shared_fans) || 0,
+      seed_hits: Number(r.seed_hits) || 0,
+      track: {
+        ...track,
+        id: track.id || r.track_id,
+        source: track.source ?? "live",
+      },
+    };
+  });
+}
+
+/** Collezioni per buyer (owner_sub) — input Diglist buyers×collections. */
+export async function buyerCollectionsForSeeds(
+  seedIds: string[],
+): Promise<
+  { buyerId: string; trackIds: Set<string>; seedHits: number }[]
+> {
+  const seeds = seedIds.filter(Boolean).slice(0, 6);
+  if (seeds.length === 0) return [];
+
+  const rows = await sql<{
+    owner_sub: string;
+    track_id: string;
+    is_seed: boolean;
+  }>(
+    `with seed_owners as (
+       select distinct owner_sub
+       from wishlist
+       where track_id = any($1::text[])
+     )
+     select w.owner_sub, w.track_id,
+            (w.track_id = any($1::text[])) as is_seed
+     from wishlist w
+     join seed_owners so on so.owner_sub = w.owner_sub`,
+    [seeds],
+  );
+
+  const map = new Map<string, { trackIds: Set<string>; seedHits: Set<string> }>();
+  for (const r of rows) {
+    let row = map.get(r.owner_sub);
+    if (!row) {
+      row = { trackIds: new Set(), seedHits: new Set() };
+      map.set(r.owner_sub, row);
+    }
+    row.trackIds.add(r.track_id);
+    if (r.is_seed) row.seedHits.add(r.track_id);
+  }
+
+  return Array.from(map.entries()).map(([buyerId, v]) => ({
+    buyerId,
+    trackIds: v.trackIds,
+    seedHits: v.seedHits.size,
+  }));
+}
+
 /**
  * Chart community: più una traccia è in wishlist (utenti distinti), più sale.
  */

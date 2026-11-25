@@ -16,7 +16,8 @@ export function StationButton({ track, compact }: Props) {
     e.preventDefault();
     e.stopPropagation();
     try {
-      sessionStorage.setItem(
+      // localStorage: la scheda nuova non vede sessionStorage dell'opener
+      localStorage.setItem(
         `dig.station.seed.${track.id}`,
         JSON.stringify(track),
       );

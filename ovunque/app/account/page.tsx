@@ -41,8 +41,8 @@ export default function AccountPage() {
         Account
       </h1>
       <p className="mt-2 max-w-xl text-sm text-soft">
-        Sandbox privato (non diglist.midivrs.com). Entra, ascolta, salva in wishlist, compra
-        dove costa meno.
+        Puoi usare Dig List senza login (cerca, play, chart, Short/Long). Accedi solo se vuoi
+        wishlist cloud, free drop in chart e cronologia su tutti i device.
       </p>
 
       <div className="mt-10 max-w-lg space-y-4 rounded-dig-lg border border-line bg-panel p-6">
@@ -77,17 +77,25 @@ export default function AccountPage() {
           </>
         ) : (
           <>
-            <p className="font-display text-xl font-black text-mist">Non connesso</p>
+            <p className="font-display text-xl font-black text-mist">Guest mode</p>
             <p className="text-sm text-soft">
-              Su app privata Cursor l’account è il tuo login. In locale usiamo un viewer di
-              prova.
+              Navigazione libera. Wishlist resta sul device. Per cronologia cloud + Free chart
+              submissions: apri l’app privata con il tuo login Cursor (Team visibility).
             </p>
-            <Link
-              href="/wishlist"
-              className="inline-flex rounded-dig border border-line px-4 py-2 text-sm font-semibold text-mist"
-            >
-              Apri wishlist locale
-            </Link>
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Link
+                href="/wishlist"
+                className="inline-flex rounded-dig border border-line px-4 py-2 text-sm font-semibold text-mist"
+              >
+                Wishlist locale ({count})
+              </Link>
+              <Link
+                href="/charts"
+                className="inline-flex rounded-dig bg-signal px-4 py-2 text-sm font-bold text-ink"
+              >
+                Charts
+              </Link>
+            </div>
           </>
         )}
       </div>

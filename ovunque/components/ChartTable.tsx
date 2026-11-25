@@ -57,7 +57,11 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                   </td>
                 ) : null}
                 <td className="px-2 py-3">
-                  <QuickPlay src={track.previewUrl} title={track.title} />
+                  <QuickPlay
+                    src={track.previewUrl}
+                    title={track.title}
+                    artist={track.artist}
+                  />
                 </td>
                 <td className="px-3 py-3">
                   <Link href={`/traccia/${track.id}`} className="flex items-center gap-3">

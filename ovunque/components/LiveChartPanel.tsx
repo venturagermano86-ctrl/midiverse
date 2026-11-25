@@ -2,13 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { ChartTable } from "@/components/ChartTable";
+import { SubmitFreeTrack } from "@/components/SubmitFreeTrack";
 import { UNDERGROUND_LANES, type LaneId } from "@/lib/live/underground";
 import type { Track } from "@/lib/types";
 
-type ChartLane = "wishlisted" | LaneId;
+type ChartLane = "wishlisted" | "free" | LaneId;
 
 const LANES: { id: ChartLane; label: string }[] = [
   { id: "wishlisted", label: "Most wishlisted" },
+  { id: "free", label: "Free downloads" },
   ...UNDERGROUND_LANES.map((l) => ({ id: l.id as ChartLane, label: l.label })),
 ];
 
@@ -22,6 +24,7 @@ export function LiveChartPanel({ fallback }: Props) {
   const [note, setNote] = useState("Carico chart…");
   const [live, setLive] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [tick, setTick] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,12 +38,14 @@ export function LiveChartPanel({ fallback }: Props) {
           setTracks(data.tracks);
           setLive(true);
           setNote(data.note || "Chart live");
-        } else if (lane === "wishlisted") {
+        } else if (lane === "wishlisted" || lane === "free") {
           setTracks([]);
           setLive(true);
           setNote(
             data.note ||
-              "Ancora vuota — più salvano in wishlist, più sale in chart",
+              (lane === "free"
+                ? "Free chart vuota — aggiungi un download gratis"
+                : "Ancora vuota — salva in wishlist"),
           );
         } else {
           setTracks(fallback);
@@ -49,7 +54,7 @@ export function LiveChartPanel({ fallback }: Props) {
         }
       } catch {
         if (!cancelled) {
-          setTracks(lane === "wishlisted" ? [] : fallback);
+          setTracks(lane === "wishlisted" || lane === "free" ? [] : fallback);
           setLive(false);
           setNote("Offline.");
         }
@@ -60,7 +65,7 @@ export function LiveChartPanel({ fallback }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [lane, fallback]);
+  }, [lane, fallback, tick]);
 
   return (
     <div>
@@ -91,18 +96,38 @@ export function LiveChartPanel({ fallback }: Props) {
             ? "…"
             : lane === "wishlisted"
               ? "Community"
-              : live
-                ? "Live · digi + 12\""
-                : "Curated"}
+              : lane === "free"
+                ? "Free"
+                : live
+                  ? "Live · digi + 12\""
+                  : "Curated"}
         </span>
         <p className="text-sm text-soft">{note}</p>
       </div>
 
-      {lane === "wishlisted" && tracks.length === 0 && !loading ? (
+      {lane === "free" ? (
+        <div className="mb-8">
+          <SubmitFreeTrack
+            onSubmitted={() => {
+              setLane("free");
+              setTick((n) => n + 1);
+            }}
+          />
+        </div>
+      ) : null}
+
+      {(lane === "wishlisted" || lane === "free") && tracks.length === 0 && !loading ? (
         <p className="rounded-dig-lg border border-line bg-panel px-4 py-10 text-sm text-muted">
-          Nessun dig in chart ancora. Apri una traccia, premi{" "}
-          <strong className="text-mist">Salva in wishlist</strong> — più utenti la
-          salvano, più sale qui.
+          {lane === "free" ? (
+            <>
+              Nessun free in chart. Compila il form sopra (login) — solo download gratis reali.
+            </>
+          ) : (
+            <>
+              Nessun dig in chart ancora. Premi ♥ / Salva in wishlist — più utenti la salvano, più
+              sale qui. Guest: wishlist locale; login: cronologia cloud.
+            </>
+          )}
         </p>
       ) : (
         <ChartTable tracks={tracks} />

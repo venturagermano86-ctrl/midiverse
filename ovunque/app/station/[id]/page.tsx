@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddToCollectionButton } from "@/components/AddToCollectionButton";
 import { CoverArt } from "@/components/CoverArt";
 import { RecordShelf } from "@/components/RecordShelf";
@@ -11,7 +11,13 @@ import {
   formatOfferPrice,
   getTrack,
 } from "@/lib/catalog";
-import { claimPreview, releasePreview } from "@/lib/previewAudio";
+import {
+  getPlayingSrc,
+  playPreview,
+  stopPreview,
+  subscribePreview,
+  subscribePreviewEnded,
+} from "@/lib/previewAudio";
 import { storeName } from "@/lib/stores";
 import type { Track } from "@/lib/types";
 
@@ -29,8 +35,6 @@ export default function StationPage() {
   const [cursor, setCursor] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(true);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const stopRef = useRef<(() => void) | null>(null);
 
   const current = items[cursor]?.track ?? null;
 
@@ -40,7 +44,9 @@ export default function StationPage() {
       setLoading(true);
       let seed: Track | null = getTrack(id) ?? null;
       try {
-        const raw = sessionStorage.getItem(`dig.station.seed.${id}`);
+        const raw =
+          localStorage.getItem(`dig.station.seed.${id}`) ||
+          sessionStorage.getItem(`dig.station.seed.${id}`);
         if (raw) seed = JSON.parse(raw) as Track;
       } catch {
         /* ignore */
@@ -69,10 +75,16 @@ export default function StationPage() {
     })();
     return () => {
       cancelled = true;
-      stopRef.current?.();
-      audioRef.current?.pause();
+      stopPreview();
     };
   }, [id]);
+
+  useEffect(() => {
+    return subscribePreview((src) => {
+      const cur = items[cursor]?.track?.previewUrl ?? null;
+      setPlaying(!!src && src === cur);
+    });
+  }, [cursor, items]);
 
   const playAt = useCallback(
     async (index: number) => {
@@ -84,42 +96,35 @@ export default function StationPage() {
         setPlaying(false);
         return;
       }
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-        audioRef.current.addEventListener("ended", () => {
-          setCursor((c) => {
-            const next = c + 1;
-            return next < items.length ? next : c;
-          });
-        });
-      }
-      const a = audioRef.current;
-      a.src = src;
-      const stop = () => {
-        a.pause();
-        setPlaying(false);
-      };
-      stopRef.current = stop;
-      claimPreview(stop);
-      try {
-        await a.play();
-        setPlaying(true);
-      } catch {
-        setPlaying(false);
-        releasePreview(stop);
-      }
+      const on = await playPreview(src);
+      setPlaying(on);
     },
     [items],
   );
 
-  // Auto-play next when cursor advances on ended
+  // Auto-play first track when queue loads; advance on end via subscribe+ended in playPreview
   useEffect(() => {
     if (!items.length) return;
     const t = items[cursor];
     if (!t?.track.previewUrl) return;
     void playAt(cursor);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursor, items.length]);
+  }, [items.length]);
+
+  // Fine preview → traccia successiva in coda
+  useEffect(() => {
+    return subscribePreviewEnded(() => {
+      setCursor((c) => {
+        const next = c + 1;
+        if (next < items.length) {
+          const src = items[next]?.track.previewUrl;
+          if (src) void playPreview(src);
+          return next;
+        }
+        return c;
+      });
+    });
+  }, [items]);
 
   const digi = useMemo(
     () => (current ? digitalOffers(current.offers)[0] : null),
@@ -127,30 +132,17 @@ export default function StationPage() {
   );
 
   function togglePlay() {
-    const a = audioRef.current;
-    if (!a || !current?.previewUrl) {
+    const src = current?.previewUrl;
+    if (!src) {
       void playAt(cursor);
       return;
     }
-    if (playing) {
-      a.pause();
+    if (playing && getPlayingSrc() === src) {
+      stopPreview();
       setPlaying(false);
-      if (stopRef.current) releasePreview(stopRef.current);
       return;
     }
-    const stop = () => {
-      a.pause();
-      setPlaying(false);
-    };
-    stopRef.current = stop;
-    claimPreview(stop);
-    void a
-      .play()
-      .then(() => setPlaying(true))
-      .catch(() => {
-        setPlaying(false);
-        releasePreview(stop);
-      });
+    void playPreview(src).then(setPlaying);
   }
 
   const shelfTracks = items.map((i) => i.track);
@@ -172,110 +164,108 @@ export default function StationPage() {
       ) : !current ? (
         <p className="mt-10 text-muted">Nessuna traccia in Station.</p>
       ) : (
-        <>
-          <section className="mt-8 grid gap-6 rounded-dig-lg border border-line bg-panel p-5 md:grid-cols-[10rem_1fr] md:p-6">
+        <div className="mt-8 grid gap-8 lg:grid-cols-[minmax(0,18rem)_1fr]">
+          <div>
             <CoverArt
               hue={current.coverHue}
               title={current.title}
               artworkUrl={current.artworkUrl}
               className="aspect-square w-full border border-line"
             />
-            <div className="min-w-0">
-              <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted">
-                Now playing · {cursor + 1}/{items.length}
+          </div>
+          <div>
+            <p className="text-[0.65rem] font-bold uppercase tracking-wider text-muted">
+              Now · {cursor + 1}/{items.length}
+            </p>
+            <h2 className="mt-1 font-display text-2xl font-black text-mist">
+              {current.title}
+            </h2>
+            <p className="text-soft">{current.artist}</p>
+            {digi ? (
+              <p className="mt-2 text-sm text-signal">
+                {formatOfferPrice(digi)} · {storeName(digi.storeId)}
               </p>
-              <h2 className="mt-1 font-display text-2xl font-black text-mist">
-                {current.title}
+            ) : null}
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={togglePlay}
+                className="rounded-dig bg-signal px-5 py-3 text-sm font-bold text-ink hover:bg-signal-hi"
+              >
+                {playing ? "Pause" : current.previewUrl ? "Play" : "No preview"}
+              </button>
+              <button
+                type="button"
+                disabled={cursor <= 0}
+                onClick={() => void playAt(cursor - 1)}
+                className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <button
+                type="button"
+                disabled={cursor >= items.length - 1}
+                onClick={() => void playAt(cursor + 1)}
+                className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal disabled:opacity-40"
+              >
+                Next
+              </button>
+              <AddToCollectionButton trackId={current.id} track={current} />
+              <Link
+                href={`/traccia/${current.id}`}
+                className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal"
+              >
+                Track
+              </Link>
+            </div>
+
+            <div className="mt-10">
+              <h2 className="font-display text-xl font-black text-mist">
+                Queue
               </h2>
-              <p className="mt-1 text-lg text-bandcamp">{current.artist}</p>
-              <p className="mt-1 text-xs text-soft">
-                {items[cursor]?.reason} · {current.genre}
-              </p>
-              {digi ? (
-                <p className="mt-2 text-sm text-signal">
-                  Digi {formatOfferPrice(digi)} · {storeName(digi.storeId)}
-                </p>
-              ) : null}
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={togglePlay}
-                  className="rounded-dig bg-signal px-5 py-3 text-sm font-bold text-ink hover:bg-signal-hi"
-                >
-                  {playing ? "Pause" : current.previewUrl ? "Play" : "No preview"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void playAt(Math.min(cursor + 1, items.length - 1))}
-                  className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal"
-                >
-                  Next →
-                </button>
-                <Link
-                  href={`/traccia/${current.id}`}
-                  className="rounded-dig border border-line px-4 py-3 text-sm font-semibold text-mist hover:border-signal hover:text-signal"
-                >
-                  Open track
-                </Link>
-                <AddToCollectionButton trackId={current.id} track={current} />
-              </div>
+              <ul className="mt-3 divide-y divide-line border border-line">
+                {items.map((row, i) => (
+                  <li key={`${row.track.id}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => void playAt(i)}
+                      className={`flex w-full items-center gap-3 px-3 py-2.5 text-left transition hover:bg-row ${
+                        i === cursor ? "bg-row" : ""
+                      }`}
+                    >
+                      <span className="w-6 font-display text-sm font-bold text-signal">
+                        {i + 1}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-mist">
+                          {row.track.title}
+                        </span>
+                        <span className="block truncate text-xs text-soft">
+                          {row.track.artist}
+                        </span>
+                      </div>
+                      {row.track.previewUrl ? (
+                        <span className="text-[0.65rem] font-bold uppercase text-signal">
+                          ▶
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
-          </section>
-
-          <section className="mt-12">
-            <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-line pb-4">
-              <div>
-                <h2 className="font-display text-xl font-black text-mist">
-                  Similar digs
-                </h2>
-                <p className="mt-1 text-sm text-soft">
-                  Lista tipo Dig List — cover una accanto all’altra
-                </p>
-              </div>
-              <p className="text-xs text-muted">{items.length} records</p>
-            </div>
-            <RecordShelf tracks={shelfTracks} />
-          </section>
-
-          <ol className="mt-12 divide-y divide-line border-y border-line">
-            {items.map((row, i) => (
-              <li key={row.track.id}>
-                <button
-                  type="button"
-                  onClick={() => void playAt(i)}
-                  className={`flex w-full items-center gap-3 px-1 py-3 text-left transition hover:bg-row ${
-                    i === cursor ? "bg-signal/10" : ""
-                  }`}
-                >
-                  <span className="w-6 font-display text-sm font-bold text-signal">
-                    {i + 1}
-                  </span>
-                  <CoverArt
-                    hue={row.track.coverHue}
-                    title={row.track.title}
-                    artworkUrl={row.track.artworkUrl}
-                    className="h-10 w-10 shrink-0"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-mist">
-                      {row.track.title}
-                    </span>
-                    <span className="block truncate text-xs text-soft">
-                      {row.track.artist} · {row.reason}
-                    </span>
-                  </span>
-                  {i === cursor && playing ? (
-                    <span className="text-[0.65rem] font-bold uppercase text-signal">
-                      Playing
-                    </span>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ol>
-        </>
+          </div>
+        </div>
       )}
+
+      {shelfTracks.length > 0 ? (
+        <div className="mt-12">
+          <h2 className="mb-4 font-display text-xl font-black text-mist">
+            Same wave
+          </h2>
+          <RecordShelf tracks={shelfTracks} />
+        </div>
+      ) : null}
     </main>
   );
 }
