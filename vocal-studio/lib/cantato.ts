@@ -2,11 +2,12 @@ import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import { spawn } from "child_process";
+import type { SungStyle } from "./remake";
 
 /**
- * Cantato free engine — turns short Edge phrases into melodic hooks.
- * Speech TTS alone = parlato. Here each word lands on a scale note,
- * stretched + light vibrato, so it reads as sung club topline.
+ * Human / melodic cantato from free Edge TTS.
+ * Each word → scale note + unique stretch/vibrato/gaps.
+ * Wet can add a quiet harmony third.
  */
 
 const EDGE_MAP: Record<string, string> = {
@@ -21,11 +22,7 @@ const EDGE_MAP: Record<string, string> = {
   libby: "en-GB-LibbyNeural",
 };
 
-function run(
-  bin: string,
-  args: string[],
-  timeoutMs = 16000
-): Promise<void> {
+function run(bin: string, args: string[], timeoutMs = 16000): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(bin, args, { stdio: ["ignore", "ignore", "pipe"] });
     const t = setTimeout(() => {
@@ -44,7 +41,9 @@ function run(
   });
 }
 
+let ffCached: string | null | undefined;
 async function ffmpegBin(): Promise<string | null> {
+  if (ffCached !== undefined) return ffCached;
   const cands: string[] = [];
   try {
     const mod = await import("ffmpeg-static");
@@ -57,19 +56,49 @@ async function ffmpegBin(): Promise<string | null> {
   for (const b of cands) {
     try {
       await run(b, ["-version"], 3000);
+      ffCached = b;
       return b;
     } catch {
       /* next */
     }
   }
+  ffCached = null;
   return null;
+}
+
+async function silenceMp3(dest: string, ms: number): Promise<void> {
+  const bin = await ffmpegBin();
+  const dur = Math.max(0.05, ms / 1000);
+  if (!bin) {
+    await fs.writeFile(dest, Buffer.alloc(0));
+    return;
+  }
+  try {
+    await run(bin, [
+      "-y",
+      "-f",
+      "lavfi",
+      "-i",
+      `anullsrc=r=24000:cl=mono`,
+      "-t",
+      String(dur),
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "64k",
+      dest,
+    ]);
+  } catch {
+    await fs.writeFile(dest, Buffer.alloc(0));
+  }
 }
 
 async function pitchAndSing(
   src: string,
   dest: string,
   semitones: number,
-  stretch = 0.72
+  stretch: number,
+  style: SungStyle
 ): Promise<void> {
   const bin = await ffmpegBin();
   if (!bin) {
@@ -91,8 +120,10 @@ async function pitchAndSing(
     tempo /= 0.5;
   }
   filters.push(`atempo=${tempo.toFixed(6)}`);
-  // Mild vibrato = human sung wobble
-  filters.push("vibrato=f=5.2:d=0.42");
+  filters.push(
+    `vibrato=f=${style.vibF.toFixed(2)}:d=${style.vibD.toFixed(2)}`
+  );
+  filters.push(`volume=${style.volume.toFixed(2)}`);
   try {
     await run(bin, [
       "-y",
@@ -115,7 +146,42 @@ async function pitchAndSing(
   }
 }
 
+async function mixHarmony(main: string, harmony: string, dest: string): Promise<void> {
+  const bin = await ffmpegBin();
+  if (!bin) {
+    await fs.copyFile(main, dest);
+    return;
+  }
+  try {
+    await run(bin, [
+      "-y",
+      "-i",
+      main,
+      "-i",
+      harmony,
+      "-filter_complex",
+      "[1:a]volume=0.28[h];[0:a][h]amix=inputs=2:duration=first:dropout_transition=0",
+      "-c:a",
+      "libmp3lame",
+      "-b:a",
+      "128k",
+      dest,
+    ]);
+  } catch {
+    await fs.copyFile(main, dest);
+  }
+}
+
 async function concatMp3Files(files: string[], dest: string): Promise<void> {
+  const nonempty: string[] = [];
+  for (const f of files) {
+    try {
+      if ((await fs.stat(f)).size > 32) nonempty.push(f);
+    } catch {
+      /* skip */
+    }
+  }
+  if (!nonempty.length) throw new Error("empty_concat");
   const bin = await ffmpegBin();
   if (bin) {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), "cat-"));
@@ -123,7 +189,7 @@ async function concatMp3Files(files: string[], dest: string): Promise<void> {
       const list = path.join(dir, "list.txt");
       await fs.writeFile(
         list,
-        files.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join("\n")
+        nonempty.map((f) => `file '${f.replace(/'/g, "'\\''")}'`).join("\n")
       );
       await run(bin, [
         "-y",
@@ -141,12 +207,12 @@ async function concatMp3Files(files: string[], dest: string): Promise<void> {
       ]);
       return;
     } catch {
-      /* buffer fallback */
+      /* buffer */
     } finally {
       fs.rm(dir, { recursive: true, force: true }).catch(() => {});
     }
   }
-  const parts = await Promise.all(files.map((f) => fs.readFile(f)));
+  const parts = await Promise.all(nonempty.map((f) => fs.readFile(f)));
   await fs.writeFile(dest, Buffer.concat(parts));
 }
 
@@ -158,27 +224,20 @@ type EdgeHandle = {
   ) => Promise<{ audioFilePath?: string }>;
 };
 
-let sharedTts: EdgeHandle | null = null;
-let sharedVoice = "";
+const ttsCache = new Map<string, EdgeHandle>();
 
-async function getEdge(voiceKey: string): Promise<{
-  tts: EdgeHandle;
-  voiceName: string;
-} | null> {
+async function getEdge(voiceKey: string): Promise<EdgeHandle | null> {
+  const voiceName = EDGE_MAP[voiceKey] || EDGE_MAP.aria;
+  if (ttsCache.has(voiceName)) return ttsCache.get(voiceName)!;
   try {
     const { MsEdgeTTS, OUTPUT_FORMAT } = await import("msedge-tts");
-    const voiceName = EDGE_MAP[voiceKey] || EDGE_MAP.aria;
-    if (sharedTts && sharedVoice === voiceName) {
-      return { tts: sharedTts, voiceName };
-    }
     const tts = new MsEdgeTTS();
     await tts.setMetadata(
       voiceName,
       OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3
     );
-    sharedTts = tts as unknown as EdgeHandle;
-    sharedVoice = voiceName;
-    return { tts: sharedTts, voiceName };
+    ttsCache.set(voiceName, tts as unknown as EdgeHandle);
+    return ttsCache.get(voiceName)!;
   } catch {
     return null;
   }
@@ -187,20 +246,20 @@ async function getEdge(voiceKey: string): Promise<{
 async function edgeWord(
   tts: EdgeHandle,
   word: string,
-  dest: string
+  dest: string,
+  rate: string
 ): Promise<boolean> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "ew-"));
   try {
     const result = (await Promise.race([
-      tts.toFile(dir, word, { rate: "-45%", pitch: "+0Hz" }),
+      tts.toFile(dir, word, { rate, pitch: "+0Hz" }),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error("timeout")), 9000)
       ),
     ])) as { audioFilePath?: string };
     const src = result.audioFilePath || path.join(dir, "audio.mp3");
     await fs.copyFile(src, dest);
-    const st = await fs.stat(dest);
-    return st.size > 200;
+    return (await fs.stat(dest)).size > 200;
   } catch {
     return false;
   } finally {
@@ -208,52 +267,82 @@ async function edgeWord(
   }
 }
 
-/**
- * Render one short hook as cantato: each word on a scale degree.
- * Returns true if Edge path succeeded.
- */
+const DEFAULT_STYLE: SungStyle = {
+  stretchBase: 0.7,
+  stretchHold: 0.58,
+  vibF: 5.2,
+  vibD: 0.45,
+  gapMs: 140,
+  edgeRate: "-42%",
+  harmony: false,
+  volume: 0.95,
+};
+
 export async function renderCantatoPhrase(opts: {
   text: string;
   dest: string;
   edgeVoice: string;
-  /** Absolute scale degrees (semitone offsets from A); relative used */
   notes: number[];
+  style?: SungStyle;
 }): Promise<boolean> {
+  const style = opts.style || DEFAULT_STYLE;
   const words = opts.text
     .replace(/\s+/g, " ")
     .trim()
     .split(" ")
     .filter(Boolean)
-    .slice(0, 5); // keep short — cantabile
+    .slice(0, 5);
   if (!words.length) return false;
 
-  const edge = await getEdge(opts.edgeVoice);
-  if (!edge) return false;
+  const tts = await getEdge(opts.edgeVoice);
+  if (!tts) return false;
 
   const root = opts.notes[0] ?? 0;
-  // Strong hook contour if notes thin
   const contour =
     opts.notes.length >= words.length
       ? opts.notes
-      : [0, 3, 5, 7, 5, 3, 0].map((s) => root + s);
+      : [0, 3, 5, 7, 5].map((s) => root + s);
 
   const work = await fs.mkdtemp(path.join(os.tmpdir(), "cantato-"));
   try {
-    const pitched: string[] = [];
+    const parts: string[] = [];
     for (let i = 0; i < words.length; i++) {
+      if (i > 0) {
+        const gap = path.join(work, `g${i}.mp3`);
+        // humanize gap ±30ms
+        const jitter = ((i * 37) % 61) - 30;
+        await silenceMp3(gap, Math.max(60, style.gapMs + jitter));
+        parts.push(gap);
+      }
       const raw = path.join(work, `w${i}.mp3`);
-      const ok = await edgeWord(edge.tts, words[i], raw);
+      // Vary speaking rate slightly per word
+      const rateN = parseInt(style.edgeRate.replace("%", ""), 10) || -42;
+      const wordRate = `${rateN - (i % 3)}%`;
+      const ok = await edgeWord(tts, words[i], raw, wordRate);
       if (!ok) return false;
+
       const semi = (contour[i % contour.length] ?? root) - root;
-      // Last word: hold longer (more stretch)
-      const stretch = i === words.length - 1 ? 0.65 : 0.74;
-      const out = path.join(work, `p${i}.mp3`);
-      await pitchAndSing(raw, out, semi, stretch);
-      pitched.push(out);
+      const stretch =
+        i === words.length - 1 ? style.stretchHold : style.stretchBase;
+      const sung = path.join(work, `p${i}.mp3`);
+      await pitchAndSing(raw, sung, semi, stretch, style);
+
+      if (style.harmony && i === words.length - 1) {
+        const harm = path.join(work, `h${i}.mp3`);
+        await pitchAndSing(raw, harm, semi + 3, stretch * 0.95, {
+          ...style,
+          volume: style.volume * 0.5,
+          vibD: style.vibD * 0.8,
+        });
+        const mixed = path.join(work, `m${i}.mp3`);
+        await mixHarmony(sung, harm, mixed);
+        parts.push(mixed);
+      } else {
+        parts.push(sung);
+      }
     }
-    await concatMp3Files(pitched, opts.dest);
-    const st = await fs.stat(opts.dest);
-    return st.size > 400;
+    await concatMp3Files(parts, opts.dest);
+    return (await fs.stat(opts.dest)).size > 400;
   } finally {
     fs.rm(work, { recursive: true, force: true }).catch(() => {});
   }

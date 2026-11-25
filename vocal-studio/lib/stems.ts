@@ -240,7 +240,8 @@ export async function buildStemBundle(opts: {
     text: string,
     dest: string,
     voice: string,
-    notes: number[]
+    notes: number[],
+    role: "dry" | "wet"
   ) => Promise<void>;
   dryVoice: string;
   wetVoice: string;
@@ -265,12 +266,13 @@ export async function buildStemBundle(opts: {
       ...opts.notes.slice(offset),
       ...opts.notes.slice(0, offset),
     ];
-    await opts.renderPhrase(dText, dPath, opts.dryVoice, slice);
+    await opts.renderPhrase(dText, dPath, opts.dryVoice, slice, "dry");
     await opts.renderPhrase(
       wText,
       wPath,
       opts.wetVoice,
-      slice.map((n) => n + 3)
+      slice.map((n) => n + 4),
+      "wet"
     );
     dryRaws.push(dPath);
     wetRaws.push(wPath);

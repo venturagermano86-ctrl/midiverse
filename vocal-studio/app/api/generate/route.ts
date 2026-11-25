@@ -201,7 +201,8 @@ export async function POST(req: NextRequest) {
       keyId,
       avoidDry: refDry,
       avoidWet: refWet,
-      seedKey: `${analysis?.sourceUrl || ""}|${analysis?.sourceTitle || ""}|${bpm}|${keyId}|${lengthSec}`,
+      // Unique every click so remakes never sound identical
+      seedKey: `${analysis?.sourceUrl || ""}|${analysis?.sourceTitle || ""}|${bpm}|${keyId}|${lengthSec}|${Date.now()}|${Math.random()}`,
     });
 
     const dry = remake.dry.map(clean);
@@ -220,12 +221,13 @@ export async function POST(req: NextRequest) {
       dryVoice: remake.dryVoice,
       wetVoice: remake.wetVoice,
       notes: remake.notes,
-      renderPhrase: async (text, dest, voice, notes) => {
+      renderPhrase: async (text, dest, voice, notes, role) => {
         const used = await renderPhrase({
           text,
           dest,
           edgeVoice: voice,
           notes,
+          style: role === "wet" ? remake.wetStyle : remake.style,
         });
         if (used === "elevenlabs") engineBox.current = "elevenlabs";
         else if (used === "edge" && engineBox.current !== "elevenlabs") {

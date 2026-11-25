@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import os from "os";
 import { renderCantatoPhrase } from "./cantato";
+import type { SungStyle } from "./remake";
 
 /**
  * Free-first cantato path (sistema nostro).
@@ -123,14 +124,16 @@ export async function renderPhrase(opts: {
   edgeVoice: string;
   elevenVoiceId?: string;
   notes?: number[];
+  style?: SungStyle;
 }): Promise<VocalEngine> {
-  // 1) True-ish cantato: word-on-notes
+  // 1) Cantato: word-on-notes + unique style
   if (
     await renderCantatoPhrase({
       text: opts.text,
       dest: opts.dest,
       edgeVoice: opts.edgeVoice,
       notes: opts.notes || [0, 3, 5, 7, 5],
+      style: opts.style,
     })
   ) {
     return "edge";

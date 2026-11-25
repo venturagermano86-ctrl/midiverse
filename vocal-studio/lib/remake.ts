@@ -2,54 +2,182 @@ import { createHash } from "crypto";
 import { KEYS } from "./keys";
 
 /**
- * Remake vocale "sistema nostro":
- * - parole diverse (stesso mood / stessa struttura sillabica)
- * - stessa durata target
- * - stesso schema di note (scala della chiave, pattern fisso)
- * - voce leggermente diversa (neighbor), stesso mood
- *
- * Non clona cantanti famosi né ricopia il testo del riferimento.
+ * Remake plan — every generate must feel different:
+ * unique phrases, unique contour, unique voices, unique sung style.
  */
 
-const NEIGHBOR_VOICE: Record<string, string> = {
-  jenny: "aria",
-  aria: "jenny",
-  sonia: "michelle",
-  michelle: "sonia",
-  emma: "aria",
-  natasha: "libby",
-  libby: "natasha",
-  guy: "brian",
-  brian: "guy",
-};
+const VOICE_POOL_F = ["aria", "jenny", "sonia", "michelle", "emma", "natasha", "libby"];
+const VOICE_POOL_M = ["guy", "brian"];
 
-/** Alternate hooks per mood bank — diverse parole, stesso feeling. */
-/** Short open-vowel hooks (2–4 words) — cantabile, not spoken essays. */
+/** Big phrase banks — EN + IT open vowels, 2–4 words. */
 const REMAKE_BANK: Record<string, { dry: string[]; wet: string[] }> = {
   celestial: {
-    dry: ["hold me slow", "take me under", "fall with me", "breathe with me", "stay with me"],
-    wet: ["oh feel you", "pull me close", "soft forever", "call my name", "open wide"],
+    dry: [
+      "hold me slow",
+      "take me under",
+      "fall with me",
+      "breathe with me",
+      "drift in blue",
+      "resta con me",
+      "portami via",
+      "soft forever",
+      "slide into quiet",
+      "glow with me",
+    ],
+    wet: [
+      "oh feel you",
+      "pull me close",
+      "call my name",
+      "open wide",
+      "non lasciarmi",
+      "solo tu",
+      "echo forever",
+      "whisper my name",
+      "fall into light",
+      "stay in glow",
+    ],
   },
   soul: {
-    dry: ["hold me closer", "love me slow", "bring me home", "don't leave me", "sing for me"],
-    wet: ["through the night", "I need you", "hold on now", "take me higher", "never let go"],
+    dry: [
+      "hold me closer",
+      "love me slow",
+      "bring me home",
+      "don't leave me",
+      "sing for me",
+      "amami ancora",
+      "resta qui",
+      "cry with me",
+      "need you now",
+      "wrap me warm",
+    ],
+    wet: [
+      "through the night",
+      "I need you",
+      "take me higher",
+      "never let go",
+      "ti sento",
+      "hold on baby",
+      "love me true",
+      "don't walk away",
+      "keep this heart",
+      "sing it soft",
+    ],
   },
   club: {
-    dry: ["take me higher", "feel the night", "move with me", "lose control", "hold the mark"],
-    wet: ["don't let go", "all night long", "run with me", "burn it down", "keep me close"],
+    dry: [
+      "take me higher",
+      "feel the night",
+      "move with me",
+      "lose control",
+      "hold the mark",
+      "spin the gate",
+      "ride this wave",
+      "push it up",
+      "body on fire",
+      "keep me moving",
+    ],
+    wet: [
+      "don't let go",
+      "all night long",
+      "run with me",
+      "burn it down",
+      "keep me close",
+      "turn it loud",
+      "shake the floor",
+      "never stop",
+      "feel the bass",
+      "dance with me",
+    ],
   },
   cold: {
-    dry: ["into the dark", "hold the line", "no way back", "run the night", "cold light"],
-    wet: ["out of time", "break the chain", "find the signal", "shadow call", "steel fire"],
+    dry: [
+      "into the dark",
+      "hold the line",
+      "no way back",
+      "run the night",
+      "cold light",
+      "steel and fire",
+      "break the grid",
+      "pulse alone",
+      "frozen heart",
+      "shadow walk",
+    ],
+    wet: [
+      "out of time",
+      "break the chain",
+      "find the signal",
+      "shadow call",
+      "wire to core",
+      "no warmth left",
+      "cut the line",
+      "empty room",
+      "cold forever",
+      "run alone",
+    ],
   },
   warm: {
-    dry: ["under the sun", "move with me", "sway with me", "love me now", "open your heart"],
-    wet: ["gold in air", "spin with me", "fire tonight", "dance till dawn", "feel alright"],
+    dry: [
+      "under the sun",
+      "move with me",
+      "sway with me",
+      "love me now",
+      "open your heart",
+      "sole sulla pelle",
+      "balla con me",
+      "heat of night",
+      "gold forever",
+      "touch the sky",
+    ],
+    wet: [
+      "gold in air",
+      "spin with me",
+      "fire tonight",
+      "dance till dawn",
+      "feel alright",
+      "kiss the sun",
+      "warm forever",
+      "night of color",
+      "hold this heat",
+      "rise with me",
+    ],
   },
+};
+
+/** Melodic shapes — big intervals so it feels sung, not spoken. */
+const CONTOURS: number[][] = [
+  [0, 3, 5, 7, 5], // rise-fall
+  [0, 5, 3, 7, 5], // call
+  [7, 5, 3, 0, 3], // descend
+  [0, 4, 7, 4, 2], // major leap
+  [0, 3, 7, 10, 7], // minor climb
+  [5, 3, 0, 3, 5], // valley
+  [0, 7, 5, 3, 0], // octave drop
+  [3, 5, 7, 5, 3], // arch mid
+  [0, 2, 5, 9, 7], // stretch
+  [0, 3, 2, 5, 0], // soul turn
+];
+
+export type SungStyle = {
+  stretchBase: number;
+  stretchHold: number;
+  vibF: number;
+  vibD: number;
+  gapMs: number;
+  edgeRate: string;
+  harmony: boolean;
+  volume: number;
 };
 
 function digest(s: string): number {
   return createHash("sha256").update(s).digest().readUInt32BE(0);
+}
+
+function rng(seed: number): () => number {
+  let x = seed || 1;
+  return () => {
+    x = (x * 1664525 + 1013904223) >>> 0;
+    return x;
+  };
 }
 
 function pickDifferent(
@@ -62,11 +190,10 @@ function pickDifferent(
   const filtered = pool.filter((p) => !avoidSet.has(p.toLowerCase()));
   const src = filtered.length >= n ? filtered : pool;
   const copy = [...src];
-  let x = seed || 1;
+  const next = rng(seed);
   const out: string[] = [];
   for (let i = 0; i < Math.min(n, copy.length); i++) {
-    x = (x * 1664525 + 1013904223) >>> 0;
-    const j = x % copy.length;
+    const j = next() % copy.length;
     out.push(copy.splice(j, 1)[0]);
   }
   return out;
@@ -76,42 +203,60 @@ function bankFromPack(packId: string, label: string): string {
   const blob = `${packId} ${label}`.toLowerCase();
   if (blob.includes("celestial") || blob.includes("airy") || blob.includes("minimal"))
     return "celestial";
-  if (blob.includes("soul") || blob.includes("deep")) return "soul";
+  if (blob.includes("soul") || blob.includes("deep") || blob.includes("nina"))
+    return "soul";
   if (blob.includes("cold") || blob.includes("techno")) return "cold";
   if (blob.includes("afro") || blob.includes("warm") || blob.includes("disco"))
     return "warm";
   return "club";
 }
 
-/** Minor/major scale intervals from root (semitones). */
 export function scaleDegrees(keyId: string): number[] {
   const key = KEYS.find((k) => k.id === keyId) || KEYS[0];
   const intervals =
-    key.mode === "minor"
-      ? [0, 3, 5, 7, 10, 12] // natural minor / pent+oct
-      : [0, 4, 5, 7, 11, 12];
+    key.mode === "minor" ? [0, 3, 5, 7, 10, 12] : [0, 4, 5, 7, 11, 12];
   return intervals.map((i) => key.rootSemitone + i);
 }
 
-/**
- * Fixed melodic contour for remake — same notes every time for a given key+seed.
- * Pattern length = number of syllable slots across dry+wet calls.
- */
 export function noteContour(keyId: string, seed: number, slots: number): number[] {
   const degrees = scaleDegrees(keyId);
-  // Classic club hook contour: up – stay – down – lift
-  const pattern = [0, 2, 1, 3, 2, 4, 3, 1, 0, 2, 4, 3];
+  const next = rng(seed);
+  const pattern = CONTOURS[next() % CONTOURS.length];
   const out: number[] = [];
-  let x = seed || 1;
   for (let i = 0; i < slots; i++) {
-    x = (x * 1103515245 + 12345) >>> 0;
     const idx = pattern[i % pattern.length] % degrees.length;
-    // micro neighbor ±1 rare
-    const nudge = x % 17 === 0 ? (x % 2 === 0 ? 1 : -1) : 0;
+    // occasional neighbor color
+    const nudge = next() % 11 === 0 ? (next() % 2 === 0 ? 1 : -1) : 0;
     const di = Math.max(0, Math.min(degrees.length - 1, idx + nudge));
     out.push(degrees[di]);
   }
   return out;
+}
+
+function pickVoice(seed: number, preferMale: boolean, avoid?: string): string {
+  const pool = preferMale ? VOICE_POOL_M : VOICE_POOL_F;
+  const next = rng(seed);
+  let v = pool[next() % pool.length];
+  if (avoid && v === avoid && pool.length > 1) {
+    v = pool[(pool.indexOf(v) + 1 + (next() % (pool.length - 1))) % pool.length];
+  }
+  return v;
+}
+
+function sungStyle(seed: number): SungStyle {
+  const next = rng(seed);
+  const stretchBase = 0.62 + (next() % 18) / 100; // 0.62–0.79
+  const stretchHold = Math.max(0.52, stretchBase - 0.1 - (next() % 8) / 100);
+  return {
+    stretchBase,
+    stretchHold,
+    vibF: 4.2 + (next() % 25) / 10, // 4.2–6.6
+    vibD: 0.35 + (next() % 25) / 100, // 0.35–0.59
+    gapMs: 90 + (next() % 140), // 90–229
+    edgeRate: `-${38 + (next() % 12)}%`, // -38 to -49
+    harmony: next() % 3 !== 0, // often on for wet
+    volume: 0.85 + (next() % 15) / 100,
+  };
 }
 
 export type RemakePlan = {
@@ -121,8 +266,9 @@ export type RemakePlan = {
   wetVoice: string;
   notes: number[];
   bank: string;
-  note:
-    string;
+  style: SungStyle;
+  wetStyle: SungStyle;
+  note: string;
 };
 
 export function planRemake(opts: {
@@ -137,24 +283,25 @@ export function planRemake(opts: {
 }): RemakePlan {
   const bank = bankFromPack(opts.packId || "", opts.label || "");
   const pool = REMAKE_BANK[bank] || REMAKE_BANK.club;
-  const seed = digest(`remake|${opts.seedKey}|${bank}|${opts.keyId}`);
+  const seed = digest(`remake|${opts.seedKey}|${bank}|${opts.keyId}|v3`);
+  const next = rng(seed);
+
   const dry = pickDifferent(pool.dry, opts.avoidDry || [], seed, 2);
-  const wet = pickDifferent(
-    pool.wet,
-    opts.avoidWet || [],
-    seed ^ 0x5f3759df,
-    2
-  );
-  const dryVoice = NEIGHBOR_VOICE[opts.voice] || opts.voice;
-  // wet: slightly different again from dry neighbor
-  const wetBase = opts.wetVoice || opts.voice;
-  const wetVoice =
-    NEIGHBOR_VOICE[dryVoice] === wetBase
-      ? dryVoice
-      : NEIGHBOR_VOICE[wetBase] || dryVoice;
+  const wet = pickDifferent(pool.wet, opts.avoidWet || [], seed ^ 0x5f3759df, 2);
+
+  const male = opts.voice === "guy" || opts.voice === "brian";
+  const dryVoice = pickVoice(seed ^ 0xabc, male);
+  const wetVoice = pickVoice(seed ^ 0xdef, male, dryVoice);
 
   const slots = [...dry, ...wet].join(" ").split(/\s+/).length;
-  const notes = noteContour(opts.keyId, seed, Math.max(8, slots));
+  const notes = noteContour(opts.keyId, seed ^ next(), Math.max(10, slots + 2));
+  const style = sungStyle(seed ^ 0x111);
+  const wetStyle = {
+    ...sungStyle(seed ^ 0x222),
+    harmony: true,
+    stretchHold: Math.max(0.5, style.stretchHold - 0.05),
+    gapMs: style.gapMs + 40,
+  };
 
   return {
     dry,
@@ -163,6 +310,8 @@ export function planRemake(opts: {
     wetVoice,
     notes,
     bank,
-    note: `Remake · parole nuove · stesso mood (${bank}) · stesso schema note (${opts.keyId}) · voce leggermente diversa.`,
+    style,
+    wetStyle,
+    note: `Cantato unico · ${bank} · voci ${dryVoice}/${wetVoice} · contorno melodico diverso ogni generate.`,
   };
 }

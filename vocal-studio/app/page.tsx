@@ -172,8 +172,8 @@ export default function VocalStudioPage() {
           Vocal Studio
         </h1>
         <p className="mt-4 max-w-lg text-[1.02rem] leading-relaxed text-mute">
-          Remake cantato free: ogni parola su una nota, stretch + vibrato —
-          non parlato piatto. Parole diverse, stessa durata/mood, voce vicina.
+          Ogni remake è diverso: voci, melodia, timing umani. Hook corti su
+          note, non parlato piatto.
         </p>
       </header>
 
