@@ -43,7 +43,10 @@ function DigListResults() {
           return;
         }
         setTracks(data.tracks ?? []);
-        setNote(data.note || "Your dig list");
+        setNote(
+          data.note ||
+            "Dig list · affinità a croce (collector / co-wishlist), non solo genere",
+        );
       } catch {
         if (!cancelled) setError("Offline — riprova.");
       }

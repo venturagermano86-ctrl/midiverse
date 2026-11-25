@@ -86,7 +86,7 @@ export default function HomePage() {
               Charts
             </h2>
             <p className="mt-1 text-sm text-soft">
-              Most wishlisted dalla community · house / minimal underground
+              Most wishlisted · Free downloads · underground — guest ok, login per cronologia
             </p>
           </div>
           <Link

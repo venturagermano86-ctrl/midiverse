@@ -1,7 +1,6 @@
-import { TRACKS } from "../catalog";
-import { resolveGenre } from "../genres";
 import type { Track } from "../types";
-import { findSimilarToCollection } from "./similar";
+import { resolveGenre } from "../genres";
+import { rankByAffinity, type AffinityHit } from "./affinity";
 
 export type DigMode = "short" | "long";
 
@@ -10,70 +9,63 @@ const LIMITS: Record<DigMode, number> = {
   long: 36,
 };
 
-function scoreVsSeeds(seeds: Track[], candidate: Track): number {
-  let best = 0;
-  for (const seed of seeds) {
-    let s = 0;
-    if (seed.artist === candidate.artist) s += 40;
-    const sg = resolveGenre(seed.genre);
-    const cg = resolveGenre(candidate.genre);
-    if (sg.slug === cg.slug) s += 34;
-    else if (sg.familySlug === cg.familySlug) s += 20;
-    if (seed.label && seed.label === candidate.label) s += 12;
-    if (seed.bpm && candidate.bpm) {
-      const d = Math.abs(seed.bpm - candidate.bpm);
-      if (d <= 3) s += 14;
-      else if (d <= 7) s += 7;
-    }
-    best = Math.max(best, s);
-  }
-  return best;
-}
-
 /**
  * Short / Long list stile diglist.midivrs.com:
- * seed selezionati (max 6) → lista dig consigliati.
+ * affinità "a croce" (collector / co-wishlist), NON solo genere.
  */
 export function buildDigList(
   seeds: Track[],
   extras: Track[],
   mode: DigMode,
-): { mode: DigMode; tracks: Track[]; note: string } {
+  coWish: Track[] = [],
+): { mode: DigMode; tracks: Track[]; note: string; affinity: AffinityHit[] } {
   const picked = seeds.slice(0, 6);
-  const exclude = new Set(picked.map((t) => t.id));
   const limit = LIMITS[mode];
 
-  const fromCollection = findSimilarToCollection(
-    picked.map((t) => t.id),
-    limit,
-  ).map((h) => h.track);
+  // Co-wishlist community = croci reali (chi ha i pick ha anche queste)
+  const boostedExtras = [...coWish, ...extras];
+  const affinity = rankByAffinity(picked, boostedExtras, limit);
 
-  const pool = new Map<string, Track>();
-  for (const t of [...fromCollection, ...extras, ...TRACKS]) {
-    if (exclude.has(t.id)) continue;
-    if (scoreVsSeeds(picked, t) < 16 && !fromCollection.some((x) => x.id === t.id)) {
-      continue;
+  // Se co-wish ha seed_hits multipli, forza in cima
+  const byId = new Map(affinity.map((h) => [h.track.id, h]));
+  for (const t of coWish) {
+    const prev = byId.get(t.id);
+    if (prev) {
+      prev.score += 60;
+      prev.croce = Math.max(prev.croce, 2);
+      prev.reasons = [
+        "croce wishlist community",
+        ...prev.reasons.filter((r) => !r.startsWith("croce")),
+      ].slice(0, 3);
     }
-    pool.set(t.id, t);
   }
 
-  const ranked = Array.from(pool.values())
-    .sort((a, b) => scoreVsSeeds(picked, b) - scoreVsSeeds(picked, a))
+  const ranked = Array.from(byId.values())
+    .sort((a, b) => b.croce - a.croce || b.score - a.score)
     .slice(0, limit);
+
+  const croceN = ranked.filter((h) => h.croce >= 2).length;
 
   return {
     mode,
-    tracks: ranked,
+    tracks: ranked.map((h) => h.track),
+    affinity: ranked,
     note:
       mode === "short"
-        ? `Short list · ${ranked.length} dig vicini ai ${picked.length} pick`
-        : `Long list · ${ranked.length} dig (più profondità) dai ${picked.length} pick`,
+        ? `Short list · ${ranked.length} dig affini (${croceN} a croce Diglist) da ${picked.length} pick`
+        : `Long list · ${ranked.length} dig affini (${croceN} a croce) — non solo genere`,
   };
 }
 
 export function digSearchQuery(seeds: Track[]): string {
+  // Query live: artisti dei pick (affinità), non solo tag genere
+  const artists = Array.from(new Set(seeds.map((s) => s.artist).filter(Boolean))).slice(
+    0,
+    3,
+  );
+  if (artists.length) return artists.join(" ");
   const first = seeds[0];
-  if (!first) return "house techno";
+  if (!first) return "house techno underground";
   const g = resolveGenre(first.genre);
   return `${first.artist} ${g.aliases[0] ?? g.name}`;
 }

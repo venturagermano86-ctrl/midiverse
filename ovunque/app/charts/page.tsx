@@ -19,9 +19,9 @@ export default function ChartsPage() {
         Charts
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-soft">
-        <strong className="text-mist">Most wishlisted</strong>: più gli utenti salvano un disco,
-        più sale in classifica. Poi lane house / minimal / techno stile deejay.de — digi + 12&quot;
-        misti.
+        <strong className="text-mist">Most wishlisted</strong> e{" "}
+        <strong className="text-mist">Free downloads</strong> — pubbliche anche da guest. Poi
+        lane underground. Login solo per salvare wishlist cloud / inviare free drop.
       </p>
       <div className="mt-8">
         <LiveChartPanel fallback={fallback} />
