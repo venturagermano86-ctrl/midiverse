@@ -207,7 +207,8 @@ export async function POST(req: NextRequest) {
     const dry = remake.dry.map(clean);
     const wet = remake.wet.map(clean);
 
-    let engine: VocalEngine = "demo";
+    // Mutable box so TS doesn't narrow engine to literal "demo" after callback
+    const engineBox: { current: VocalEngine } = { current: "demo" };
     const workDir = path.join(tmp, "stems");
     await fs.mkdir(workDir, { recursive: true });
 
@@ -226,12 +227,14 @@ export async function POST(req: NextRequest) {
           edgeVoice: voice,
           notes,
         });
-        if (used === "elevenlabs") engine = "elevenlabs";
-        else if (used === "edge" && engine !== "elevenlabs") engine = "edge";
-        else if (engine === "demo" && used === "demo") engine = "demo";
+        if (used === "elevenlabs") engineBox.current = "elevenlabs";
+        else if (used === "edge" && engineBox.current !== "elevenlabs") {
+          engineBox.current = "edge";
+        }
       },
     });
 
+    const engine = engineBox.current;
     const payloadAnalysis = {
       ...(analysis || {}),
       bpm,

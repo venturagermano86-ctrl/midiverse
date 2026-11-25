@@ -1,9 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type SyntheticEvent } from "react";
 import { GENRES } from "@/lib/genres";
 import { BPM_PRESETS, KEYS } from "@/lib/keys";
 import { SINGERS } from "@/lib/singers";
+
+/** Only one stem player at a time — pause/reset the others. */
+function exclusivePlay(e: SyntheticEvent<HTMLAudioElement>) {
+  const current = e.currentTarget;
+  document.querySelectorAll("audio").forEach((el) => {
+    if (el !== current) {
+      el.pause();
+      try {
+        el.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+    }
+  });
+}
 
 const LENGTHS = [
   { sec: 16, label: "16s" },
@@ -458,7 +473,13 @@ export default function VocalStudioPage() {
                     Scarica
                   </a>
                 </div>
-                <audio controls playsInline className="w-full" src={dryUrl} />
+                <audio
+                  controls
+                  playsInline
+                  className="w-full"
+                  src={dryUrl}
+                  onPlay={exclusivePlay}
+                />
               </div>
             )}
             {wetUrl && (
@@ -473,7 +494,13 @@ export default function VocalStudioPage() {
                     Scarica
                   </a>
                 </div>
-                <audio controls playsInline className="w-full" src={wetUrl} />
+                <audio
+                  controls
+                  playsInline
+                  className="w-full"
+                  src={wetUrl}
+                  onPlay={exclusivePlay}
+                />
               </div>
             )}
             {mixUrl && (
@@ -495,6 +522,7 @@ export default function VocalStudioPage() {
                   autoPlay
                   className="w-full"
                   src={mixUrl}
+                  onPlay={exclusivePlay}
                 />
               </div>
             )}
