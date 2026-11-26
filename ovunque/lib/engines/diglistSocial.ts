@@ -13,6 +13,7 @@
 import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
 import type { Track } from "../types";
+import { isClubDig } from "./clubFilter";
 import {
   loadBandcampProfile,
   loadFanLibrary,
@@ -52,9 +53,9 @@ export type DigSocialResult = {
 };
 
 const LIMITS = {
-  short: { buyers: 16, out: 30 },
-  long: { buyers: 56, out: 60 },
-  station: { buyers: 16, out: 24 },
+  short: { buyers: 16, out: 48 },
+  long: { buyers: 56, out: 90 },
+  station: { buyers: 16, out: 36 },
 } as const;
 
 function itemKey(artist: string, title: string): string {
@@ -106,9 +107,9 @@ function isCorrelated(seeds: Track[], candidate: Track, reason: string): boolean
   // 3) co-wishlist / buyer croce forte
   if (/croce×|co-wishlist|buyer croce/i.test(reason)) return true;
 
-  // 4) Discogs/iTunes artist-label graph only
+  // 4) Discogs rete artista→label→artisti / iTunes stesso artista
   if (
-    /Discogs|iTunes discografia|stesso artista|stessa label|label mate|artist mate/i.test(
+    /Discogs|iTunes discografia|stesso artista|stessa label|label mate|artist mate|rete|network/i.test(
       reason,
     )
   ) {
@@ -128,8 +129,8 @@ function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
     if (seen.has(key)) continue;
     const a = h.track.artist.toLowerCase();
     const l = (h.track.label || "").toLowerCase();
-    if ((perArtist.get(a) ?? 0) >= 3) continue;
-    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 3) continue;
+    if ((perArtist.get(a) ?? 0) >= 4) continue;
+    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 5) continue;
     out.push(h);
     seen.add(key);
     perArtist.set(a, (perArtist.get(a) ?? 0) + 1);
@@ -174,6 +175,8 @@ function bumpHit(
   if (isJunk(track.artist, track.title)) return;
   if (seeds.length && isSeedOrOwned(track, seeds, ownedKeys)) return;
   if (seeds.length && !isCorrelated(seeds, track, reason)) return;
+  const seedHints = seeds.map((s) => s.artist);
+  if (!isClubDig(track, seedHints)) return;
   const key = itemKey(track.artist, track.title);
   const prev = map.get(key);
   if (!prev) {
@@ -311,19 +314,25 @@ export async function runDiglistSocial(
     void loadFanLibrary;
   }
 
-  // ——— Discogs: artist discog + label mates (scout già filtra style) ———
+  // ——— Discogs RETE: artista → label → roster → hop artisti ———
   try {
-    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 36 : 24);
+    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 90 : 55);
     dg.tracks.forEach((t, i) => {
       const sameArtist = seeds.some((s) => {
-        const sa = s.artist.toLowerCase();
+        const names = s.artist
+          .toLowerCase()
+          .split(/\s*(?:&|,|feat\.?|ft\.?|x)\s*/);
         const ca = t.artist.toLowerCase();
-        return ca === sa || ca.includes(sa) || sa.includes(ca);
+        return names.some(
+          (sa) => sa.length > 2 && (ca === sa || ca.includes(sa) || sa.includes(ca)),
+        );
       });
       bump(
         t,
-        (sameArtist ? 140 : 105) - i,
-        sameArtist ? "Discogs artist mate" : `Discogs label mate ${t.label}`,
+        (sameArtist ? 145 : 110) - i,
+        sameArtist
+          ? "rete: stesso artista"
+          : `rete: label ${t.label}`,
         2,
         2,
       );
@@ -356,9 +365,11 @@ export async function runDiglistSocial(
     }
   }
 
+  const seedHints = seeds.map((s) => s.artist);
   let ranked = Array.from(hits.values())
     .filter((h) => h.score >= 70)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
+    .filter((h) => isClubDig(h.track, seedHints))
     .filter((h) => !/mickey|topolino|disney/i.test(`${h.track.title} ${h.track.artist}`))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
@@ -377,14 +388,14 @@ export async function runDiglistSocial(
   const audioActive = options.audioCompare === true;
   const src = bandcampLive
     ? "Bandcamp live"
-    : "Discogs artist + label mates (no dump)";
+    : "rete Discogs artista→label→artisti";
 
   return {
     tracks: ranked,
     bandcampLive,
     audioActive,
-    method: "diglist-artist-label-croce",
-    note: `${mode} · ${ranked.length} dig · ${src} · solo artista/label${audioActive ? "" : " · audio off"}`,
+    method: "diglist-label-network",
+    note: `${mode} · ${ranked.length} dig · ${src}${audioActive ? "" : " · audio off"}`,
     stats: {
       owned: ownedKeys.size,
       buyersUsed: Math.min(buyersUsed, cfg.buyers) || buyersUsed,
