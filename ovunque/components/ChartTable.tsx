@@ -18,13 +18,25 @@ import type { Track } from "@/lib/types";
 type Props = {
   tracks: Track[];
   showRank?: boolean;
+  /** Cuore → callback (DigStart: seed per Short/Long). */
+  onHeartToggle?: (track: Track, wishlisted: boolean) => void;
+  /**
+   * Se true, Station solo su tracce “attive” (cuore o pick).
+   * Se assente, Station sempre disponibile.
+   */
+  stationUnlocked?: (trackId: string) => boolean;
 };
 
 /**
  * Chart stile deejay.de: digi + 12" misti con prezzi.
  * Player rapido al posto del bottone «VINYL →» inutile.
  */
-export function ChartTable({ tracks, showRank = true }: Props) {
+export function ChartTable({
+  tracks,
+  showRank = true,
+  onHeartToggle,
+  stationUnlocked,
+}: Props) {
   return (
     <div className="overflow-x-auto border border-line">
       <table className="w-full min-w-[780px] border-collapse text-left text-sm">
@@ -67,7 +79,7 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                         />
                       </Link>
                       <div className="absolute left-0.5 top-0.5 z-10 scale-90">
-                        <HeartWish track={track} />
+                        <HeartWish track={track} onAfterToggle={onHeartToggle} />
                       </div>
                       <div className="absolute bottom-0.5 right-0.5 z-10 scale-90">
                         <QuickPlay
@@ -142,7 +154,16 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                 </td>
                 <td className="px-2 py-3 text-right">
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <StationButton track={track} compact />
+                    {stationUnlocked && !stationUnlocked(track.id) ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-dig border border-line px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-muted"
+                        title="♥ wishlist/collezione o tap selezione, poi Station"
+                      >
+                        Station
+                      </span>
+                    ) : (
+                      <StationButton track={track} compact />
+                    )}
                   </div>
                 </td>
               </tr>

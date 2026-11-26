@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChartTable } from "@/components/ChartTable";
+import { useCollection } from "@/components/CollectionProvider";
 import { encodeSeedsParam, stashDigPicks } from "@/lib/digPickBag";
-import { parseScreenshotQueries } from "@/lib/screenshotParse";
+import { pickExactTrack } from "@/lib/screenshotExact";
+import { parseScreenshotLines } from "@/lib/screenshotParse";
 import type { Track } from "@/lib/types";
 
 type Mode = "auto" | "artist" | "label";
@@ -15,12 +17,17 @@ const MODES: { id: Mode; label: string }[] = [
   { id: "label", label: "Label" },
 ];
 
+const MAX_PICKS = 6;
+
 /**
- * Parte Diglist da: artista, label, testo, link YT/BC/Discogs/Beatport/SC, screenshot.
+ * Screenshot / foto → traccia ESATTA.
+ * Cuore → wishlist = collezione.
+ * Seleziona (tap) → Short / Long / Station (suggerite).
  */
 export function DigStart({ className = "" }: { className?: string }) {
   const router = useRouter();
   const params = useSearchParams();
+  const { has, ready } = useCollection();
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<Mode>("auto");
@@ -29,6 +36,8 @@ export function DigStart({ className = "" }: { className?: string }) {
   const [kind, setKind] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
+  /** Dopo screenshot: Station solo se cuore (collezione) o pick list */
+  const [gateSuggest, setGateSuggest] = useState(false);
 
   useEffect(() => {
     const initial = params.get("q");
@@ -38,6 +47,23 @@ export function DigStart({ className = "" }: { className?: string }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  function togglePick(id: string) {
+    setPicked((prev) => {
+      if (prev.includes(id)) return prev.filter((x) => x !== id);
+      if (prev.length >= MAX_PICKS) return prev;
+      return [...prev, id];
+    });
+  }
+
+  /** Cuore = solo wishlist/collezione — non seed Diglist. */
+  function onHeartToggle(_track: Track, wishlisted: boolean) {
+    setStatus(
+      wishlisted
+        ? "♥ In wishlist — fa parte della tua collezione"
+        : "Tolta dalla wishlist / collezione",
+    );
+  }
 
   async function runStart(query: string, m: Mode = mode) {
     const term = query.trim();
@@ -50,6 +76,7 @@ export function DigStart({ className = "" }: { className?: string }) {
     setTracks([]);
     setPicked([]);
     setKind("");
+    setGateSuggest(false);
     try {
       const res = await fetch("/api/live/start", {
         method: "POST",
@@ -66,12 +93,9 @@ export function DigStart({ className = "" }: { className?: string }) {
       setKind(data.kind || m);
       setStatus(
         hits.length
-          ? `${data.note || "Ok"} — tocca fino a 6 e lancia Short/Long`
+          ? `${data.note || "Ok"} — ♥ wishlist/collezione · tap per Short/Long/Station`
           : "Nessun hit — prova artista, label: Perlon, o un link YouTube",
       );
-      if (hits.length) {
-        setPicked(hits.slice(0, Math.min(3, hits.length)).map((t) => t.id));
-      }
     } catch {
       setStatus("Rete lenta — riprova");
     } finally {
@@ -85,40 +109,46 @@ export function DigStart({ className = "" }: { className?: string }) {
       return;
     }
     setBusy(true);
-    setStatus("OCR screenshot…");
+    setStatus("OCR screenshot / foto…");
     setTracks([]);
     setPicked([]);
+    setGateSuggest(true);
     try {
       const Tesseract = (await import("tesseract.js")).default;
       const result = await Tesseract.recognize(file, "eng");
-      const found = parseScreenshotQueries(result.data.text || "", 6);
+      const found = parseScreenshotLines(result.data.text || "", 8);
       if (!found.length) {
         setStatus("Screenshot poco chiaro — prova chart/wishlist nitida");
         return;
       }
-      setStatus(`OCR: ${found.length} righe — cerco…`);
+      setStatus(`OCR: ${found.length} tracce — match esatto…`);
       const hits: Track[] = [];
       const seen = new Set<string>();
+      let missed = 0;
       for (const line of found) {
-        const res = await fetch("/api/live/start", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ q: line, mode: "auto", limit: 4 }),
-        });
+        const res = await fetch(
+          `/api/live/search?q=${encodeURIComponent(line.query)}&limit=16`,
+        );
         const data = await res.json().catch(() => ({}));
-        for (const t of (data.tracks as Track[]) || []) {
-          if (seen.has(t.id)) continue;
-          seen.add(t.id);
-          hits.push(t);
+        const candidates = Array.isArray(data.tracks)
+          ? (data.tracks as Track[])
+          : [];
+        const pick = pickExactTrack(line, candidates);
+        if (!pick) {
+          missed++;
+          continue;
         }
+        if (seen.has(pick.track.id)) continue;
+        seen.add(pick.track.id);
+        hits.push(pick.track);
       }
-      setTracks(hits.slice(0, 28));
-      setKind("screenshot");
-      setPicked(hits.slice(0, 3).map((t) => t.id));
+      setTracks(hits);
+      setKind("screenshot-exact");
+      setPicked([]);
       setStatus(
         hits.length
-          ? `Da screenshot → ${hits.length} dig — Short/Long`
-          : "OCR ok ma nessun catalogo — cerca a mano",
+          ? `Trovate ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non in catalogo` : ""}. ♥ → wishlist/collezione · tap → Short/Long/Station`
+          : "OCR letto ma nessuna traccia esatta — ritaglia meglio o cerca a mano",
       );
     } catch {
       setStatus("OCR fallito — riprova");
@@ -127,18 +157,10 @@ export function DigStart({ className = "" }: { className?: string }) {
     }
   }
 
-  function togglePick(id: string) {
-    setPicked((prev) => {
-      if (prev.includes(id)) return prev.filter((x) => x !== id);
-      if (prev.length >= 6) return prev;
-      return [...prev, id];
-    });
-  }
-
   function goDig(listMode: "short" | "long") {
-    const seeds = tracks.filter((t) => picked.includes(t.id)).slice(0, 6);
+    const seeds = tracks.filter((t) => picked.includes(t.id)).slice(0, MAX_PICKS);
     if (!seeds.length) {
-      setStatus("Seleziona almeno 1 disco (cuore/riga) per Short/Long");
+      setStatus("Seleziona (tap) almeno 1 traccia per Short / Long — il cuore va in wishlist");
       return;
     }
     const bag = stashDigPicks(listMode, seeds);
@@ -149,6 +171,13 @@ export function DigStart({ className = "" }: { className?: string }) {
   }
 
   const pickedTracks = tracks.filter((t) => picked.includes(t.id));
+  const suggestReady = pickedTracks.length > 0;
+
+  function stationOpen(id: string) {
+    if (!gateSuggest) return true;
+    // Dopo screenshot: Station se in collezione (cuore) o pickata per list
+    return picked.includes(id) || (ready && has(id));
+  }
 
   return (
     <section
@@ -161,8 +190,9 @@ export function DigStart({ className = "" }: { className?: string }) {
         Parti da tutto
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-soft">
-        Artista, label, titolo, link YouTube / Bandcamp / Discogs / Beatport / SoundCloud,
-        oppure screenshot. Poi Short/Long sulla rete label.
+        Screenshot / foto → trovi{" "}
+        <strong className="font-semibold text-mist">quella</strong> traccia. Cuore → wishlist e
+        entra in collezione. Tap per selezionare → Short / Long / Station (suggerite).
       </p>
 
       <div className="mt-4 flex flex-wrap gap-1.5">
@@ -223,14 +253,45 @@ export function DigStart({ className = "" }: { className?: string }) {
           onClick={() => fileRef.current?.click()}
           className="rounded-dig border border-line px-4 py-2 text-xs font-bold uppercase tracking-wider text-muted hover:border-signal hover:text-signal disabled:opacity-50"
         >
-          Screenshot
+          Screenshot / foto
         </button>
         <span className="text-[0.7rem] text-muted">
-          Esempi: <button type="button" className="text-signal underline" onClick={() => { setQ("Ricardo Villalobos"); setMode("artist"); void runStart("Ricardo Villalobos", "artist"); }}>Villalobos</button>
+          Esempi:{" "}
+          <button
+            type="button"
+            className="text-signal underline"
+            onClick={() => {
+              setQ("Ricardo Villalobos");
+              setMode("artist");
+              void runStart("Ricardo Villalobos", "artist");
+            }}
+          >
+            Villalobos
+          </button>
           {" · "}
-          <button type="button" className="text-signal underline" onClick={() => { setQ("Perlon"); setMode("label"); void runStart("Perlon", "label"); }}>Perlon</button>
+          <button
+            type="button"
+            className="text-signal underline"
+            onClick={() => {
+              setQ("Perlon");
+              setMode("label");
+              void runStart("Perlon", "label");
+            }}
+          >
+            Perlon
+          </button>
           {" · "}
-          <button type="button" className="text-signal underline" onClick={() => { setQ("All Inn Records"); setMode("label"); void runStart("All Inn Records", "label"); }}>All Inn</button>
+          <button
+            type="button"
+            className="text-signal underline"
+            onClick={() => {
+              setQ("All Inn Records");
+              setMode("label");
+              void runStart("All Inn Records", "label");
+            }}
+          >
+            All Inn
+          </button>
         </span>
       </div>
 
@@ -240,10 +301,11 @@ export function DigStart({ className = "" }: { className?: string }) {
         <div className="mt-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-display text-lg font-black text-mist">
-              Risultati · tap per pick ({picked.length}/6)
+              {gateSuggest ? "Tracce esatte" : "Risultati"} · ♥ wishlist · tap list (
+              {picked.length}/{MAX_PICKS})
             </h3>
-            {pickedTracks.length > 0 ? (
-              <div className="flex gap-2">
+            {suggestReady ? (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => goDig("short")}
@@ -259,23 +321,29 @@ export function DigStart({ className = "" }: { className?: string }) {
                   Long list
                 </button>
               </div>
-            ) : null}
+            ) : (
+              <p className="text-[0.7rem] font-bold uppercase tracking-wider text-muted">
+                ♥ collezione · tap → Short / Long / Station
+              </p>
+            )}
           </div>
           <ul className="mb-4 flex flex-wrap gap-1.5">
             {tracks.slice(0, 28).map((t) => {
               const on = picked.includes(t.id);
+              const wished = ready && has(t.id);
               return (
                 <li key={t.id}>
                   <button
                     type="button"
                     onClick={() => togglePick(t.id)}
-                    className={`max-w-[14rem] truncate rounded-dig border px-2 py-1 text-left text-[0.7rem] transition ${
+                    className={`max-w-[16rem] truncate rounded-dig border px-2 py-1 text-left text-[0.7rem] transition ${
                       on
                         ? "border-signal bg-signal/15 text-mist"
                         : "border-line text-muted hover:border-signal/40"
                     }`}
                     title={`${t.artist} — ${t.title}`}
                   >
+                    {wished ? "♥ " : ""}
                     {on ? "✓ " : ""}
                     {t.artist} — {t.title}
                   </button>
@@ -283,7 +351,12 @@ export function DigStart({ className = "" }: { className?: string }) {
               );
             })}
           </ul>
-          <ChartTable tracks={tracks} showRank={false} />
+          <ChartTable
+            tracks={tracks}
+            showRank={false}
+            onHeartToggle={onHeartToggle}
+            stationUnlocked={gateSuggest ? stationOpen : undefined}
+          />
         </div>
       ) : null}
     </section>

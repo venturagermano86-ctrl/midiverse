@@ -6,10 +6,12 @@ import type { Track } from "@/lib/types";
 type Props = {
   track: Track;
   className?: string;
+  /** Dopo cuore on/off — es. DigStart aggiunge ai seed Short/Long/Station. */
+  onAfterToggle?: (track: Track, wishlisted: boolean) => void;
 };
 
-/** Cuore sulla cover → wishlist. */
-export function HeartWish({ track, className = "" }: Props) {
+/** Cuore sulla cover → wishlist = collezione. */
+export function HeartWish({ track, className = "", onAfterToggle }: Props) {
   const { has, toggle, ready } = useCollection();
   const on = has(track.id);
 
@@ -17,13 +19,15 @@ export function HeartWish({ track, className = "" }: Props) {
     <button
       type="button"
       disabled={!ready}
-      title={on ? "Togli dalla wishlist" : "Salva in wishlist"}
-      aria-label={on ? "Togli dalla wishlist" : "Salva in wishlist"}
+      title={on ? "Togli da wishlist / collezione" : "Cuore → wishlist / collezione"}
+      aria-label={on ? "Togli da wishlist / collezione" : "Salva in wishlist / collezione"}
       aria-pressed={on}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        const next = !on;
         toggle(track);
+        onAfterToggle?.(track, next);
       }}
       className={`inline-grid h-9 w-9 place-items-center rounded-full text-base transition ${
         on
