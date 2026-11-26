@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { useWishlist } from "@/components/CollectionProvider";
 import { RecordShelf } from "@/components/RecordShelf";
+import { getBandcampUsername } from "@/lib/bandcampProfile";
 import { loadDigPicks } from "@/lib/digPickBag";
 import type { Track } from "@/lib/types";
 
@@ -12,11 +14,13 @@ function DigListResults() {
   const modeParam = params.get("mode") === "long" ? "long" : "short";
   const bag = params.get("bag");
   const seedsParam = params.get("seeds");
+  const { tracks: owned } = useWishlist();
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [note, setNote] = useState("Scouting Diglist…");
+  const [note, setNote] = useState("Diglist croce in corso…");
   const [seedCount, setSeedCount] = useState(0);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"short" | "long">(modeParam);
+  const [genres, setGenres] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,7 +41,12 @@ function DigListResults() {
         const res = await fetch("/api/diglist", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ seeds, mode }),
+          body: JSON.stringify({
+            seeds,
+            owned: owned.slice(0, 400),
+            mode,
+            bandcampUser: getBandcampUsername() || undefined,
+          }),
         });
         const data = await res.json();
         if (cancelled) return;
@@ -46,9 +55,10 @@ function DigListResults() {
           return;
         }
         setTracks(data.tracks ?? []);
+        setGenres(Array.isArray(data.genres) ? data.genres : []);
         setNote(
           data.note ||
-            "Scout: Bandcamp buyers×collezioni + Discogs label/artista (non random)",
+            "Diglist: acquirenti × collezioni (croce). Genere solo filtri.",
         );
       } catch {
         if (!cancelled) setError("Offline — riprova.");
@@ -57,7 +67,9 @@ function DigListResults() {
     return () => {
       cancelled = true;
     };
-  }, [modeParam, bag, seedsParam]);
+    // owned.length evita loop su nuova ref
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modeParam, bag, seedsParam, owned.length]);
 
   return (
     <main className="px-4 py-10 md:px-8 md:py-12">
@@ -71,17 +83,28 @@ function DigListResults() {
         {error || note}
         {seedCount > 0 && !error ? ` · from ${seedCount} pick${seedCount === 1 ? "" : "s"}` : ""}
       </p>
-      <div className="mt-4">
+      {!error && genres.length > 0 ? (
+        <p className="mt-2 text-xs text-muted">
+          Filtri genere (solo UI): {genres.slice(0, 12).join(" · ")}
+        </p>
+      ) : null}
+      <div className="mt-4 flex flex-wrap gap-4">
         <Link
           href="/wishlist"
           className="text-xs font-bold uppercase tracking-wider text-signal"
         >
           ← Back to picks
         </Link>
+        <Link
+          href="/account"
+          className="text-xs font-bold uppercase tracking-wider text-muted hover:text-signal"
+        >
+          Bandcamp username
+        </Link>
       </div>
 
       {error ? null : tracks.length === 0 ? (
-        <p className="mt-12 text-muted">Carico consigliati…</p>
+        <p className="mt-12 text-muted">Incrocio compratori × collezioni…</p>
       ) : (
         <div className="mt-8">
           <RecordShelf tracks={tracks} />

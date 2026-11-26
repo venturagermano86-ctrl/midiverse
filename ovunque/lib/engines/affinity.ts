@@ -14,25 +14,20 @@ import type { Track } from "../types";
 
 /** Cluster di gusto: tracce che "si crociano" come fan Bandcamp. */
 export const TASTE_CLUSTERS: string[][] = [
-  // Germano / Closed Edition house diggers (croce forte)
-  ["hold-the-mark", "spin-the-gate", "river-cut", "open-roof"],
-  // deep / late night
-  ["harbour-bell", "soft-clamp", "late-ferry", "red-room-loop", "salt-line"],
-  // peak / warehouse techno-leaning
-  [
-    "glass-corridor",
-    "chrome-prayer",
-    "acid-dock",
-    "dry-ice",
-    "copper-wire",
-    "neon-pallet",
-    "grid-manners",
-    "beatport-exclusive",
-  ],
-  // disco / nu / warm
-  ["velvet-runway", "static-kiss", "only-on-bandcamp"],
+  // House 4/4 stretto (niente afro/disco mischiati)
+  ["hold-the-mark", "spin-the-gate", "river-cut", "red-room-loop"],
+  // Deep house late night
+  ["harbour-bell", "soft-clamp", "midnight-relay"],
+  // Tech house / warehouse
+  ["neon-pallet", "grid-manners", "dry-ice", "copper-wire"],
+  // Peak techno
+  ["glass-corridor", "chrome-prayer", "acid-dock", "beatport-exclusive"],
+  // Disco / nu
+  ["velvet-runway", "static-kiss", "salt-line", "late-ferry", "only-on-bandcamp"],
+  // Afro / organic
+  ["open-roof"],
   // electro / leftfield
-  ["low-voltage", "midnight-relay"],
+  ["low-voltage"],
 ];
 
 const clusterOf = new Map<string, number>();
