@@ -1,20 +1,23 @@
 /**
  * Un solo <Audio> globale in tutta l'app.
  * Qualsiasi ▶ chiama playPreview — i precedenti si fermano sempre.
+ * playingId evita che due cover con lo stesso URL (o URL sbagliato cached)
+ * mostrino entrambe “play”.
  */
 
-type Listener = (playingSrc: string | null) => void;
-type EndedListener = (endedSrc: string) => void;
+type Listener = (playingSrc: string | null, playingId: string | null) => void;
+type EndedListener = (endedSrc: string, endedId: string | null) => void;
 
 let audio: HTMLAudioElement | null = null;
 let playingSrc: string | null = null;
+let playingId: string | null = null;
 const listeners = new Set<Listener>();
 const endedListeners = new Set<EndedListener>();
 
 function notify() {
   listeners.forEach((fn) => {
     try {
-      fn(playingSrc);
+      fn(playingSrc, playingId);
     } catch {
       /* ignore */
     }
@@ -28,12 +31,14 @@ function ensure(): HTMLAudioElement | null {
     audio.preload = "none";
     audio.addEventListener("ended", () => {
       const ended = playingSrc;
+      const endedId = playingId;
       playingSrc = null;
+      playingId = null;
       notify();
       if (ended) {
         endedListeners.forEach((fn) => {
           try {
-            fn(ended);
+            fn(ended, endedId);
           } catch {
             /* ignore */
           }
@@ -46,7 +51,7 @@ function ensure(): HTMLAudioElement | null {
 
 export function subscribePreview(fn: Listener): () => void {
   listeners.add(fn);
-  fn(playingSrc);
+  fn(playingSrc, playingId);
   return () => {
     listeners.delete(fn);
   };
@@ -63,15 +68,31 @@ export function getPlayingSrc(): string | null {
   return playingSrc;
 }
 
-/** Toggle: stesso src in play → stop. Altro src → ferma e avvia. */
-export async function playPreview(src: string): Promise<boolean> {
+export function getPlayingId(): string | null {
+  return playingId;
+}
+
+/**
+ * Toggle: stesso id (o stesso src senza id) in play → stop.
+ * Altro → ferma e avvia. Passa trackId quando puoi.
+ */
+export async function playPreview(
+  src: string,
+  trackId?: string | null,
+): Promise<boolean> {
   const a = ensure();
   if (!a || !src) return false;
 
-  if (playingSrc === src && !a.paused) {
+  const same =
+    trackId && playingId
+      ? playingId === trackId && !a.paused
+      : playingSrc === src && !a.paused;
+
+  if (same) {
     a.pause();
     a.currentTime = 0;
     playingSrc = null;
+    playingId = null;
     notify();
     return false;
   }
@@ -89,6 +110,7 @@ export async function playPreview(src: string): Promise<boolean> {
   });
 
   playingSrc = src;
+  playingId = trackId ?? null;
   notify();
   if (a.src !== src) {
     a.src = src;
@@ -98,6 +120,7 @@ export async function playPreview(src: string): Promise<boolean> {
     return true;
   } catch {
     playingSrc = null;
+    playingId = null;
     notify();
     return false;
   }
@@ -110,6 +133,7 @@ export function stopPreview(): void {
     a.currentTime = 0;
   }
   playingSrc = null;
+  playingId = null;
   notify();
 }
 
