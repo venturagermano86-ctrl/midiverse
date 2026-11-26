@@ -191,6 +191,75 @@ export async function buyerCollectionsForSeeds(
   }));
 }
 
+/** Label stabile senza leak email/sub crudo. */
+export function diggerLabel(ownerSub: string): string {
+  let h = 0;
+  for (let i = 0; i < ownerSub.length; i++) {
+    h = (Math.imul(h, 31) + ownerSub.charCodeAt(i)) >>> 0;
+  }
+  const code = h.toString(36).toUpperCase().padStart(5, "0").slice(0, 5);
+  return `Digger ${code}`;
+}
+
+export type DiggerListSummary = {
+  ownerSub: string;
+  label: string;
+  tracks: number;
+  lastSaved: string;
+  sampleTitles: string[];
+};
+
+/** Liste digger visibili (private app): tutti gli owner con ≥1 wishlist. */
+export async function listVisibleDiggers(
+  limit = 80,
+): Promise<DiggerListSummary[]> {
+  const rows = await sql<{
+    owner_sub: string;
+    tracks: string | number;
+    last_saved: string;
+  }>(
+    `select owner_sub,
+            count(*)::int as tracks,
+            max(saved_at)::text as last_saved
+     from wishlist
+     group by owner_sub
+     having count(*) > 0
+     order by count(*) desc, max(saved_at) desc
+     limit $1`,
+    [limit],
+  );
+
+  const samples = await sql<{ owner_sub: string; title: string }>(
+    `select owner_sub, title
+     from wishlist
+     where owner_sub = any($1::text[])
+     order by saved_at desc`,
+    [rows.map((r) => r.owner_sub)],
+  );
+  const sampleMap = new Map<string, string[]>();
+  for (const s of samples) {
+    const arr = sampleMap.get(s.owner_sub) ?? [];
+    if (arr.length < 4) arr.push(s.title);
+    sampleMap.set(s.owner_sub, arr);
+  }
+
+  return rows.map((r) => ({
+    ownerSub: r.owner_sub,
+    label: diggerLabel(r.owner_sub),
+    tracks: Number(r.tracks) || 0,
+    lastSaved: r.last_saved,
+    sampleTitles: sampleMap.get(r.owner_sub) ?? [],
+  }));
+}
+
+/** Quanti digger distinti hanno liste (per croce / UI). */
+export async function countVisibleDiggers(): Promise<number> {
+  const rows = await sql<{ n: string | number }>(
+    `select count(distinct owner_sub)::int as n from wishlist`,
+  );
+  return Number(rows[0]?.n) || 0;
+}
+
 /**
  * Chart community: più una traccia è in wishlist (utenti distinti), più sale.
  */

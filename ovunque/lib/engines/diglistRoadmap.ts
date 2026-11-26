@@ -46,7 +46,11 @@
 
 export type DigPhase = 1 | 2;
 
-/** Finché non c’è massa critica di account/wishlist, restiamo in Fase 1. */
+/**
+ * Fase 1 = rete label primaria.
+ * Liste digger ora VISIBILI in /liste — la croce wishlist gira già in Diglist
+ * (peso crescente con più owner). Passare a 2 quando ci sono abbastanza account.
+ */
 export const DIGLIST_PHASE: DigPhase = 1;
 
 /** Quanti seed in comune bastano per considerare “stessa autostrada” utente. */
@@ -70,5 +74,5 @@ export function diglistPhaseNote(phase: DigPhase = DIGLIST_PHASE): string {
   if (phase === 2) {
     return "Fase 2 · croce utenti (wishlist/collezioni/Bandcamp) + rete label";
   }
-  return "Fase 1 · rete label Discogs (All Inn→Perlon…) · croce utenti dopo";
+  return "Fase 1 · rete label Discogs + liste digger visibili (/liste) per croce";
 }

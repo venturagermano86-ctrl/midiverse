@@ -330,11 +330,11 @@ export async function runDiglistSocial(
       if (croce < USER_CROCE_MIN_SHARED) continue;
       userCroceHits += 1;
       const strong = croce >= USER_CROCE_STRONG_SHARED;
-      // In Fase 2 questi score stanno sopra la rete label; ora riempiono se ci sono dati
+      // Liste digger ora visibili (/liste) → croce wishlist conta già in Fase 1
       const score =
-        (DIGLIST_PHASE === 2 ? 200 : 80) * croce +
-        row.shared_fans * 25 +
-        (strong ? 120 : 60);
+        (DIGLIST_PHASE === 2 ? 200 : 140) * croce +
+        row.shared_fans * 30 +
+        (strong ? 160 : 80);
       bump(
         row.track,
         score,
@@ -365,7 +365,7 @@ export async function runDiglistSocial(
         const strong = col.seedHits >= USER_CROCE_STRONG_SHARED;
         bump(
           t,
-          (DIGLIST_PHASE === 2 ? 160 : 70) + col.seedHits * 20,
+          (DIGLIST_PHASE === 2 ? 160 : 110) + col.seedHits * 28,
           strong
             ? `buyer croce×${col.seedHits} (autostrada)`
             : `buyer croce×${col.seedHits}`,
