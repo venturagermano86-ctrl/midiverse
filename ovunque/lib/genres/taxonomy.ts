@@ -1,7 +1,9 @@
 /**
- * Tassonomia professionale stile Beatport charts + Discogs Electronic styles.
- * Ogni entry ha slug stabile, parent (family), alias per mapping iTunes/curated.
+ * Tassonomia professionale stile Beatport charts + Discogs Electronic styles
+ * + tag Bandcamp digger. Ogni entry ha slug stabile, parent (family), alias.
  */
+
+import { BANDCAMP_TAG_SLUGS, BEATPORT_LANE_SLUGS } from "./bandcampTags";
 
 export type GenreNode = {
   slug: string;
@@ -38,7 +40,7 @@ export const GENRE_FAMILIES: GenreFamily[] = [
     slug: "house",
     name: "House",
     blurb:
-      "4/4 groove — acid, UK, 90s, 2000s, Chicago, deep, tech, afro, french…",
+      "4/4 groove — acid, UK, micro, outsider, balearic, amapiano, jersey…",
     hue: 28,
     genres: [
       G({
@@ -365,6 +367,79 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         bpmHint: "140–160",
         hue: 0,
       }),
+      // Bandcamp / Diglist tags — house lane
+      G({
+        slug: "microhouse",
+        name: "Microhouse",
+        code: "MCH",
+        family: "House",
+        familySlug: "house",
+        blurb: "Clicky grooves, Perlon / Kompakt DNA (Bandcamp tag)",
+        aliases: ["microhouse", "micro house", "click house"],
+        bpmHint: "120–128",
+        hue: 190,
+      }),
+      G({
+        slug: "outsider-house",
+        name: "Outsider / Lo-Fi House",
+        code: "OSH",
+        family: "House",
+        familySlug: "house",
+        blurb: "Tape hiss, DIY jack — Bandcamp outsider / lo-fi house",
+        aliases: [
+          "outsider house",
+          "lo-fi house",
+          "lofi house",
+          "lo fi house",
+          "diy house",
+        ],
+        bpmHint: "118–126",
+        hue: 35,
+      }),
+      G({
+        slug: "balearic",
+        name: "Balearic",
+        code: "BAL",
+        family: "House",
+        familySlug: "house",
+        blurb: "Sunset pads, island pulse — Bandcamp balearic",
+        aliases: ["balearic", "balearic beat", "ibiza"],
+        bpmHint: "100–122",
+        hue: 48,
+      }),
+      G({
+        slug: "leftfield-house",
+        name: "Leftfield House",
+        code: "LFH",
+        family: "House",
+        familySlug: "house",
+        blurb: "Weird angles on the 4/4 — Bandcamp leftfield house",
+        aliases: ["leftfield house", "leftfield", "experimental house"],
+        bpmHint: "118–128",
+        hue: 140,
+      }),
+      G({
+        slug: "amapiano",
+        name: "Amapiano",
+        code: "AMA",
+        family: "House",
+        familySlug: "house",
+        blurb: "Log drums, South African piano house — Bandcamp / Beatport",
+        aliases: ["amapiano", "ama piano", "piano beats"],
+        bpmHint: "110–115",
+        hue: 22,
+      }),
+      G({
+        slug: "jersey-club",
+        name: "Jersey Club",
+        code: "JRC",
+        family: "House",
+        familySlug: "house",
+        blurb: "Chopped vocals, bed-squeak bounce — Bandcamp jersey club",
+        aliases: ["jersey club", "jersey", "newark club"],
+        bpmHint: "130–140",
+        hue: 8,
+      }),
     ],
   },
   {
@@ -403,7 +478,7 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         family: "Techno",
         familySlug: "techno",
         blurb: "Sparse grooves, micro-detail",
-        aliases: ["minimal", "minimal techno", "deep tech", "microhouse"],
+        aliases: ["minimal", "minimal techno", "deep tech"],
         bpmHint: "124–130",
         hue: 200,
       }),
@@ -439,6 +514,68 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         aliases: ["acid", "acid techno", "acidtechno"],
         bpmHint: "125–135",
         hue: 95,
+      }),
+      // Bandcamp / Discogs — techno lane
+      G({
+        slug: "dub-techno",
+        name: "Dub Techno",
+        code: "DTB",
+        family: "Techno",
+        familySlug: "techno",
+        blurb: "Chord haze, delay — Basic Channel / Bandcamp dub techno",
+        aliases: ["dub techno", "dubtechno", "dub-techno", "basic channel"],
+        bpmHint: "120–128",
+        hue: 230,
+      }),
+      G({
+        slug: "berlin-techno",
+        name: "Berlin Techno",
+        code: "BRL",
+        family: "Techno",
+        familySlug: "techno",
+        blurb: "Ostgut / Berghain pressure — Bandcamp berlin techno",
+        aliases: [
+          "berlin techno",
+          "berghain",
+          "ostgut",
+          "berlin",
+          "german techno",
+        ],
+        bpmHint: "128–138",
+        hue: 250,
+      }),
+      G({
+        slug: "detroit-techno",
+        name: "Detroit Techno",
+        code: "DET",
+        family: "Techno",
+        familySlug: "techno",
+        blurb: "Belleville three lineage — Bandcamp detroit techno",
+        aliases: ["detroit techno", "detroit", "belleville"],
+        bpmHint: "125–135",
+        hue: 15,
+      }),
+      G({
+        slug: "ambient-techno",
+        name: "Ambient Techno",
+        code: "AMT",
+        family: "Techno",
+        familySlug: "techno",
+        blurb: "Soft-focus techno — Bandcamp ambient techno",
+        aliases: ["ambient techno", "ambient-techno", "downtempo techno"],
+        bpmHint: "110–125",
+        hue: 200,
+      }),
+      G({
+        slug: "industrial-techno",
+        name: "Industrial Techno",
+        code: "INT",
+        family: "Techno",
+        familySlug: "techno",
+        blurb: "Metal percussion, warehouse grit — Bandcamp industrial techno",
+        aliases: ["industrial techno", "industrial-techno"],
+        bpmHint: "130–145",
+        hue: 0,
       }),
     ],
   },
@@ -481,6 +618,28 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         aliases: ["dance", "dance & electronic", "electro pop", "edm", "electronic"],
         bpmHint: "118–128",
         hue: 195,
+      }),
+      G({
+        slug: "italo-disco",
+        name: "Italo Disco",
+        code: "ITL",
+        family: "Disco / Dance",
+        familySlug: "disco-dance",
+        blurb: "Synth melody, Cosmic / Bandcamp italo",
+        aliases: ["italo disco", "italo", "italo-disco", "cosmic disco"],
+        bpmHint: "110–125",
+        hue: 340,
+      }),
+      G({
+        slug: "ebm-new-beat",
+        name: "EBM / New Beat",
+        code: "EBM",
+        family: "Disco / Dance",
+        familySlug: "disco-dance",
+        blurb: "Body music, Belgian new beat — Bandcamp EBM",
+        aliases: ["ebm", "new beat", "electronic body music", "body music", "newbeat"],
+        bpmHint: "110–130",
+        hue: 310,
       }),
     ],
   },
@@ -534,6 +693,56 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         bpmHint: "138–142",
         hue: 220,
       }),
+      G({
+        slug: "footwork",
+        name: "Footwork",
+        code: "FTW",
+        family: "Bass / Breaks",
+        familySlug: "bass-breaks",
+        blurb: "Teklife / Bandcamp footwork — rapid hats, battle tempos",
+        aliases: ["footwork", "juke footwork", "teklife"],
+        bpmHint: "150–165",
+        hue: 10,
+      }),
+      G({
+        slug: "broken-beat",
+        name: "Broken Beat",
+        code: "BRB",
+        family: "Bass / Breaks",
+        familySlug: "bass-breaks",
+        blurb: "West London syncopation — Bandcamp broken beat",
+        aliases: ["broken beat", "brokenbeat", "bruk"],
+        bpmHint: "120–135",
+        hue: 55,
+      }),
+      G({
+        slug: "uk-bass",
+        name: "UK Bass / Future Garage",
+        code: "UKB",
+        family: "Bass / Breaks",
+        familySlug: "bass-breaks",
+        blurb: "Post-dubstep UK bass — Bandcamp future garage",
+        aliases: [
+          "uk bass",
+          "future garage",
+          "post-dubstep",
+          "uk funky",
+          "futuregarage",
+        ],
+        bpmHint: "130–140",
+        hue: 175,
+      }),
+      G({
+        slug: "grime",
+        name: "Grime",
+        code: "GRM",
+        family: "Bass / Breaks",
+        familySlug: "bass-breaks",
+        blurb: "140 square wave MC energy — Bandcamp grime",
+        aliases: ["grime", "8-bar", "eski"],
+        bpmHint: "138–142",
+        hue: 265,
+      }),
     ],
   },
   {
@@ -564,6 +773,28 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         aliases: ["liquid", "liquid dnb", "liquid drum & bass"],
         bpmHint: "170–174",
         hue: 170,
+      }),
+      G({
+        slug: "jungle",
+        name: "Jungle",
+        code: "JNG",
+        family: "Drum & Bass",
+        familySlug: "drum-bass",
+        blurb: "Amen science, ragga chops — Bandcamp jungle",
+        aliases: ["jungle", "oldschool jungle", "ragga jungle", "jump-up"],
+        bpmHint: "160–170",
+        hue: 130,
+      }),
+      G({
+        slug: "neurofunk",
+        name: "Neurofunk",
+        code: "NRF",
+        family: "Drum & Bass",
+        familySlug: "drum-bass",
+        blurb: "Reese tech, dark rollers — Bandcamp neurofunk",
+        aliases: ["neurofunk", "neuro", "techstep"],
+        bpmHint: "172–178",
+        hue: 155,
       }),
     ],
   },
@@ -648,6 +879,28 @@ export const GENRE_FAMILIES: GenreFamily[] = [
         bpmHint: "100–120",
         hue: 300,
       }),
+      G({
+        slug: "braindance",
+        name: "Braindance",
+        code: "BRN",
+        family: "Leftfield / Ambient",
+        familySlug: "leftfield",
+        blurb: "Warp / Rephlex DNA — Bandcamp braindance",
+        aliases: ["braindance", "brain dance", "rephlex"],
+        bpmHint: "variable",
+        hue: 275,
+      }),
+      G({
+        slug: "industrial",
+        name: "Industrial / Noise",
+        code: "INDN",
+        family: "Leftfield / Ambient",
+        familySlug: "leftfield",
+        blurb: "Harsh electronics — Bandcamp industrial",
+        aliases: ["industrial", "noise", "power electronics"],
+        bpmHint: "variable",
+        hue: 0,
+      }),
     ],
   },
   {
@@ -711,10 +964,18 @@ export function getFamily(slug: string): GenreFamily | undefined {
   return GENRE_FAMILIES.find((f) => f.slug === slug);
 }
 
-/** Mappa stringa grezza (iTunes / curated / Discogs) → nodo canonico. */
+/** Mappa stringa grezza (iTunes / curated / Discogs / Bandcamp / Beatport) → nodo. */
 export function resolveGenre(raw: string | undefined | null): GenreNode {
   if (!raw) return bySlug.get("dance-electro-pop")!;
   const n = norm(raw);
+
+  // Bandcamp / Beatport exact tags first (digger vocabulary)
+  const tagSlug = BANDCAMP_TAG_SLUGS[n] ?? BEATPORT_LANE_SLUGS[n];
+  if (tagSlug) {
+    const tagged = bySlug.get(tagSlug);
+    if (tagged) return tagged;
+  }
+
   const direct = byAlias.get(n);
   if (direct) return direct;
 

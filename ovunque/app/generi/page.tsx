@@ -5,7 +5,7 @@ import { GENRE_FAMILIES } from "@/lib/genres";
 export const metadata = {
   title: "Genres — OVUNQUE",
   description:
-    "Browse by Beatport-style genre lanes and Discogs Electronic styles — then compare store prices.",
+    "Browse Bandcamp digger tags, Beatport chart lanes and Discogs Electronic styles — then compare store prices.",
 };
 
 export default function GeneriPage() {
@@ -18,7 +18,7 @@ export default function GeneriPage() {
         Genres
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-muted">
-        Divisioni accurate come Beatport charts e Discogs styles: famiglie, sottogeneri, BPM
+        Tag Bandcamp digger + Beatport charts + Discogs styles: famiglie, sottogeneri, BPM
         tipici. Entra in una lane, cerca live, confronta i prezzi sugli store.
       </p>
 
