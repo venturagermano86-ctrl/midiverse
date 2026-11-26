@@ -26,7 +26,7 @@ async function stationPayload(seed: Track, body: {
   const owned = (body.owned ?? [])
     .map((t) => sanitizeTrack(t))
     .filter((t): t is Track => !!t?.id && !!t?.title)
-    .slice(0, 400);
+    .slice(0, 80);
 
   const bandcampUser =
     typeof body.bandcampUser === "string"
@@ -38,20 +38,23 @@ async function stationPayload(seed: Track, body: {
     ownedLocal: owned,
   });
 
+  // Enrich leggero — station non deve esplodere iTunes
   const tracks = await enrichPreviews(
-    result.tracks.map((h) => h.track),
-    5,
+    result.tracks.slice(0, 4).map((h) => h.track),
+    3,
   );
+  const byId = new Map(tracks.map((t) => [t.id, t]));
+  const merged = result.tracks.map((h) => byId.get(h.track.id) ?? h.track);
 
   return {
     seedId: seed.id,
-    count: tracks.length,
+    count: merged.length,
     note: result.note,
     method: result.method,
     bandcampLive: result.bandcampLive,
     audioActive: result.audioActive,
     stats: result.stats,
-    items: tracks.map((track, i) => ({
+    items: merged.map((track, i) => ({
       index: i,
       reason: result.tracks[i]?.reasons.join(" · ") || "Diglist croce",
       track,
