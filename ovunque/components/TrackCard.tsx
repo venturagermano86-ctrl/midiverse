@@ -53,6 +53,7 @@ export function TrackCard({ track, index = 0 }: Props) {
               src={track.previewUrl}
               title={track.title}
               artist={track.artist}
+              trackId={track.id}
             />
           </div>
         </div>

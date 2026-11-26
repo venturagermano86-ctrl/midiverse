@@ -14,9 +14,17 @@ type NetRelease = {
   genre: string;
 };
 
-/** Nucleo digger che chiedi tu — artisti/label già usciti su queste case. */
+/** Nucleo digger — All Inn roster (Gaskin → LP Rhythm / JK Rollins / Kolter…). */
 const NETWORK: NetRelease[] = [
-  // All Inn
+  // All Inn — corda Gaskin
+  { id: "fb-gaskin-feel", artist: "Gaskin", title: "Feel EP", label: "All Inn Records", year: 2018, genre: "House" },
+  { id: "fb-gaskin-moves", artist: "Gaskin", title: "Moves", label: "All Inn Records", year: 2016, genre: "House" },
+  { id: "fb-lp-rhythm-nights", artist: "LP Rhythm", title: "Nights Like This", label: "All Inn Records", year: 2019, genre: "House" },
+  { id: "fb-lp-rhythm-deep", artist: "LP Rhythm", title: "Deep Into It", label: "All Inn Records", year: 2020, genre: "House" },
+  { id: "fb-jk-rollins-swing", artist: "JK Rollins", title: "Swing Thing", label: "All Inn Records", year: 2017, genre: "House" },
+  { id: "fb-jk-rollins-groove", artist: "JK Rollins", title: "Groove Therapy", label: "All Inn Records", year: 2019, genre: "House" },
+  { id: "fb-kolter-pulse", artist: "Kolter", title: "Pulse Check", label: "All Inn Records", year: 2018, genre: "House" },
+  { id: "fb-kolter-late", artist: "Kolter", title: "Late Hours", label: "All Inn Records", year: 2021, genre: "House" },
   { id: "fb-coldfish-revelation", artist: "Coldfish", title: "Revelation One Remixes", label: "All Inn Records", year: 2011, genre: "Minimal" },
   { id: "fb-arkajo-landslide", artist: "Arkajo", title: "Landslide EP", label: "All Inn Records", year: 2014, genre: "Minimal" },
   { id: "fb-traumer-mezon", artist: "Traumer", title: "Mezon EP", label: "All Inn Records", year: 2013, genre: "Minimal" },
@@ -25,6 +33,7 @@ const NETWORK: NetRelease[] = [
   { id: "fb-roustam-shape", artist: "Roustam", title: "The Shape Of Deep To Come", label: "All Inn Records", year: 2012, genre: "Minimal" },
   { id: "fb-verrina-terra", artist: "Verrina & Ventura", title: "La Terra Trema", label: "All Inn Black", year: 2016, genre: "Minimal" },
   { id: "fb-noha-eterno", artist: "Noha", title: "Eterno Ritorno", label: "All Inn Records", year: 2017, genre: "Minimal" },
+  { id: "fb-pulpyt-pulp", artist: "Pulpyt", title: "Pulp This E.p.", label: "All Inn Records", year: 2016, genre: "House" },
   // Perlon (dove finiscono gli All Inn mates / Villalobos)
   { id: "fb-pantytec-glimpse", artist: "Pantytec", title: "A Glimpse", label: "Perlon", year: 2001, genre: "Minimal" },
   { id: "fb-rv-frank", artist: "Ricardo Villalobos", title: "Frank Mueller Melodram", label: "Perlon", year: 1999, genre: "Minimal" },
@@ -118,7 +127,11 @@ export function fallbackLabelNetwork(seeds: Track[], limit = 36): Track[] {
   for (const s of seeds) {
     labelBucket(s.label || "").forEach((b) => want.add(b));
     // Artista noto → apri la rete anche senza label sul pick
-    if (/villalobos|ventura|luciano|traumer|arkajo|coldfish/i.test(s.artist)) {
+    if (
+      /villalobos|ventura|luciano|traumer|arkajo|coldfish|gaskin|lp\s*rhythm|jk\s*rollin|kolter|jaffa|summed|pulpyt/i.test(
+        s.artist,
+      )
+    ) {
       ["all inn", "perlon", "rawax", "cadenza", "playhouse"].forEach((b) =>
         want.add(b),
       );
@@ -140,6 +153,11 @@ export function fallbackLabelNetwork(seeds: Track[], limit = 36): Track[] {
     for (const s of seeds) {
       if (r.artist.toLowerCase().includes(s.artist.toLowerCase().split(/\s+/)[0] || ""))
         pts += 4;
+    }
+    // Pick Gaskin → prioritizza LP Rhythm / JK Rollins / Kolter (stessa corda All Inn)
+    if (/gaskin|lp\s*rhythm|jk\s*rollin|kolter/i.test(seeds.map((s) => s.artist).join(" "))) {
+      if (/gaskin|lp rhythm|jk rollins|kolter/i.test(r.artist)) pts += 18;
+      if (/all inn/i.test(lk)) pts += 6;
     }
     return pts;
   };

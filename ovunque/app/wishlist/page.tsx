@@ -30,15 +30,28 @@ export default function WishlistPage() {
         <div className="mt-16 max-w-lg space-y-4">
           <h1 className="font-display text-3xl font-black text-mist">Your records</h1>
           <p className="text-soft">
-            Empty. Salva tracce con <strong className="text-mist">+ Wishlist</strong>, poi
-            seleziona fino a 6 e lancia Short / Long list — si apre in una scheda nuova.
+            Empty. Salva tracce con <strong className="text-mist">♥</strong>, poi
+            seleziona fino a 6 e lancia Short / Long. La lista diventa visibile agli altri
+            digger su{" "}
+            <Link href="/liste" className="text-signal underline">
+              Liste
+            </Link>{" "}
+            per la croce.
           </p>
-          <Link
-            href="/cerca"
-            className="inline-flex rounded-dig bg-signal px-5 py-3 text-sm font-bold text-ink"
-          >
-            Search tracks
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/cerca"
+              className="inline-flex rounded-dig bg-signal px-5 py-3 text-sm font-bold text-ink"
+            >
+              Search tracks
+            </Link>
+            <Link
+              href="/liste"
+              className="inline-flex rounded-dig border border-line px-5 py-3 text-sm font-bold text-mist hover:border-signal"
+            >
+              Liste digger
+            </Link>
+          </div>
         </div>
       ) : (
         <PickShelf tracks={tracks} />

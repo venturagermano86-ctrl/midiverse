@@ -10,6 +10,7 @@ const NAV = [
   { href: "/cerca", label: "Tracks" },
   { href: "/generi", label: "Genres" },
   { href: "/wishlist", label: "Wishlist" },
+  { href: "/liste", label: "Liste" },
   { href: "/account", label: "Account" },
 ];
 

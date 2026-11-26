@@ -95,6 +95,9 @@ export default async function TrackPage({ params, searchParams }: Props) {
           {track.previewUrl ? (
             <ExclusiveAudio
               src={track.previewUrl}
+              title={track.title}
+              artist={track.artist}
+              trackId={track.id}
               className="mt-4 w-full max-w-sm"
             />
           ) : null}

@@ -16,6 +16,7 @@ import { getBandcampUsername } from "@/lib/bandcampProfile";
 import {
   getPlayingSrc,
   playPreview,
+  setPlayQueue,
   stopPreview,
   subscribePreview,
   subscribePreviewEnded,
@@ -72,6 +73,17 @@ export default function StationPage() {
           setItems(data.items);
           setNote(data.note || "Station · Diglist croce (stesso motore Short/Long)");
           setCursor(0);
+          const q = (data.items as StationRow[])
+            .map((row) => row.track)
+            .filter((t) => t.previewUrl)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              artist: t.artist,
+              previewUrl: t.previewUrl!,
+              artworkUrl: t.artworkUrl,
+            }));
+          setPlayQueue(q, 0);
         } else {
           setNote("Station non disponibile per questa traccia.");
         }
@@ -90,9 +102,13 @@ export default function StationPage() {
   }, [id, ownedLen]);
 
   useEffect(() => {
-    return subscribePreview((src) => {
-      const cur = items[cursor]?.track?.previewUrl ?? null;
-      setPlaying(!!src && src === cur);
+    return subscribePreview((src, id) => {
+      const cur = items[cursor]?.track;
+      if (!cur) {
+        setPlaying(false);
+        return;
+      }
+      setPlaying(!!src && (id ? id === cur.id : src === cur.previewUrl));
     });
   }, [cursor, items]);
 
@@ -106,7 +122,11 @@ export default function StationPage() {
         setPlaying(false);
         return;
       }
-      const on = await playPreview(src);
+      const on = await playPreview(src, row.track.id, {
+        title: row.track.title,
+        artist: row.track.artist,
+        artworkUrl: row.track.artworkUrl,
+      });
       setPlaying(on);
     },
     [items],
@@ -127,8 +147,9 @@ export default function StationPage() {
       setCursor((c) => {
         const next = c + 1;
         if (next < items.length) {
-          const src = items[next]?.track.previewUrl;
-          if (src) void playPreview(src);
+          const row = items[next];
+          const src = row?.track.previewUrl;
+          if (src) void playPreview(src, row.track.id);
           return next;
         }
         return c;
@@ -152,7 +173,7 @@ export default function StationPage() {
       setPlaying(false);
       return;
     }
-    void playPreview(src).then(setPlaying);
+    void playPreview(src, current?.id).then(setPlaying);
   }
 
   const shelfTracks = items.map((i) => i.track);

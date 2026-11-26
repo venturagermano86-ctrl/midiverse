@@ -38,13 +38,35 @@ async function stationPayload(seed: Track, body: {
     ownedLocal: owned,
   });
 
-  // Enrich leggero — ▶ al click via /api/live/preview
+  // Seed SEMPRE in testa — Play/Station parte da quella traccia, non da un dig a caso
+  const others = result.tracks.filter((h) => h.track.id !== seed.id);
+  const orderedHits = [
+    {
+      track: seed,
+      score: 999,
+      croceBuyers: 0,
+      reasons: ["seed · traccia selezionata"],
+    },
+    ...others,
+  ];
+
+  // Enrich leggero — ▶ al click via /api/live/preview (match stretto, no audio sbagliato)
   const tracks = await enrichPreviews(
-    result.tracks.slice(0, 4).map((h) => h.track),
+    orderedHits.slice(0, 5).map((h) => h.track),
     3,
   );
   const byId = new Map(tracks.map((t) => [t.id, t]));
-  const merged = result.tracks.map((h) => byId.get(h.track.id) ?? h.track);
+  // Mantieni preview/artwork già sul seed se presenti
+  if (seed.previewUrl) {
+    const enrichedSeed = byId.get(seed.id);
+    byId.set(seed.id, {
+      ...(enrichedSeed ?? seed),
+      ...seed,
+      previewUrl: seed.previewUrl,
+      artworkUrl: seed.artworkUrl || enrichedSeed?.artworkUrl,
+    });
+  }
+  const merged = orderedHits.map((h) => byId.get(h.track.id) ?? h.track);
 
   return {
     seedId: seed.id,
@@ -56,10 +78,10 @@ async function stationPayload(seed: Track, body: {
     stats: result.stats,
     items: merged.map((track, i) => ({
       index: i,
-      reason: result.tracks[i]?.reasons.join(" · ") || "Diglist croce",
+      reason: orderedHits[i]?.reasons.join(" · ") || "Diglist croce",
       track,
-      score: result.tracks[i]?.score,
-      croceBuyers: result.tracks[i]?.croceBuyers,
+      score: orderedHits[i]?.score,
+      croceBuyers: orderedHits[i]?.croceBuyers,
     })),
   };
 }

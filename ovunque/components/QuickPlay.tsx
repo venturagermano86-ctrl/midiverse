@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import {
+  getPlayingId,
   getPlayingSrc,
   playPreview,
   subscribePreview,
@@ -12,13 +13,15 @@ type Props = {
   title?: string;
   /** Se manca src, risolvi preview da artist+title (consigliati / dig). */
   artist?: string;
+  /** Id traccia — il ▶ attivo è solo su QUESTA cover. */
+  trackId?: string;
 };
 
 const previewCache = new Map<string, string>();
 const missCache = new Set<string>();
 
 /** Player rapido 1-click — un solo audio globale; risolve preview se manca. */
-export function QuickPlay({ src, title, artist }: Props) {
+export function QuickPlay({ src, title, artist, trackId }: Props) {
   const [resolved, setResolved] = useState<string | null>(src ?? null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -27,16 +30,18 @@ export function QuickPlay({ src, title, artist }: Props) {
   useEffect(() => {
     setResolved(src ?? null);
     setMiss(false);
-  }, [src]);
+  }, [src, trackId]);
 
   useEffect(() => {
     const current = resolved;
-    if (!current) {
-      setPlaying(false);
-      return;
-    }
-    return subscribePreview((s) => setPlaying(s === current));
-  }, [resolved]);
+    return subscribePreview((s, id) => {
+      if (trackId) {
+        setPlaying(!!s && id === trackId);
+        return;
+      }
+      setPlaying(!!current && s === current);
+    });
+  }, [resolved, trackId]);
 
   async function resolveSrc(): Promise<string | null> {
     if (resolved) return resolved;
@@ -97,8 +102,15 @@ export function QuickPlay({ src, title, artist }: Props) {
         void (async () => {
           const url = await resolveSrc();
           if (!url) return;
-          const on = await playPreview(url);
-          setPlaying(on || getPlayingSrc() === url);
+          const on = await playPreview(url, trackId, {
+            title: title ?? undefined,
+            artist: artist ?? undefined,
+          });
+          if (trackId) {
+            setPlaying(on || getPlayingId() === trackId);
+          } else {
+            setPlaying(on || getPlayingSrc() === url);
+          }
         })();
       }}
       aria-label={playing ? `Stop ${title ?? ""}` : `Play ${title ?? ""}`}

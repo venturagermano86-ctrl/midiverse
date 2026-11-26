@@ -50,6 +50,37 @@ const LABEL_BRIDGE: Record<string, string[]> = {
   rawax: ["Perlon", "All Inn Records", "Cadenza"],
 };
 
+/**
+ * Artisti All Inn / corda UK — se il pick non ha label, apri comunque All Inn.
+ * Es. Gaskin → LP Rhythm, JK Rollins, Kolter…
+ */
+const ARTIST_HOME_LABEL: Record<string, string> = {
+  gaskin: "All Inn Records",
+  "lp rhythm": "All Inn Records",
+  "l.p. rhythm": "All Inn Records",
+  "jk rollins": "All Inn Records",
+  "j.k. rollins": "All Inn Records",
+  "jk rolling": "All Inn Records",
+  kolter: "All Inn Records",
+  "coldfish": "All Inn Records",
+  arkajo: "All Inn Records",
+  traumer: "All Inn Records",
+  "jaffa surfa": "All Inn Records",
+  "summed & dot": "All Inn Records",
+  summed: "All Inn Records",
+  "germano ventura": "All Inn Records",
+  ventura: "All Inn Records",
+};
+
+function homeLabelForArtist(artist: string): string | null {
+  const a = artist.toLowerCase().trim();
+  if (ARTIST_HOME_LABEL[a]) return ARTIST_HOME_LABEL[a];
+  for (const [key, lab] of Object.entries(ARTIST_HOME_LABEL)) {
+    if (a.includes(key) || key.includes(a)) return lab;
+  }
+  return null;
+}
+
 type DiscogsSearchHit = {
   id: number;
   title?: string;
@@ -426,6 +457,9 @@ export async function scoutDiscogsGraph(
     if (seed.label && seed.label !== "—") {
       trustedLabels.add(normalizeSeedLabel(seed.label));
     }
+    // Gaskin / LP Rhythm / Kolter… → forza All Inn anche senza label sul seed
+    const home = homeLabelForArtist(seed.artist);
+    if (home) trustedLabels.add(home);
 
     for (const name of names) {
       if (timedOut()) break;

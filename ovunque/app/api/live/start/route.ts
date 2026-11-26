@@ -66,6 +66,44 @@ export async function POST(req: Request) {
       }
     }
 
+    // Artisti All Inn (Gaskin…) senza labelHint → apri comunque rete Discogs All Inn
+    const ALL_INN_ARTISTS =
+      /gaskin|lp\s*rhythm|jk\s*rollin|kolter|coldfish|arkajo|traumer|jaffa|summed|pulpyt|ventura/i;
+    if (
+      tracks.length < 8 &&
+      !resolved.labelHint &&
+      ALL_INN_ARTISTS.test(
+        `${resolved.artistHint || ""} ${resolved.queries.join(" ")}`,
+      )
+    ) {
+      const artistName = resolved.artistHint || resolved.queries[0] || "Gaskin";
+      const seed: Track = {
+        id: `start-allinn-${artistName.slice(0, 20)}`,
+        title: "All Inn dig",
+        artist: artistName,
+        label: "All Inn Records",
+        genre: "House",
+        year: new Date().getFullYear(),
+        mood: "club",
+        coverHue: 28,
+        suggested: true,
+        rails: ["per-te"],
+        offers: [],
+        source: "live",
+      };
+      try {
+        const dg = await scoutDiscogsGraph([seed], limit, "short");
+        for (const t of dg.tracks) {
+          if (seen.has(t.id)) continue;
+          seen.add(t.id);
+          tracks.push(t);
+          if (tracks.length >= limit) break;
+        }
+      } catch {
+        /* fall through */
+      }
+    }
+
     // Artista / testo / link → iTunes (+ query multiple)
     const queries = resolved.queries.length
       ? resolved.queries
