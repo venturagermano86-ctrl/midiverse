@@ -6,6 +6,7 @@
 import { itunesSearch } from "./itunes";
 import type { Track } from "../types";
 import { resolveGenre } from "../genres";
+import { isClubDig } from "../engines/clubFilter";
 
 function norm(s: string): string {
   return s.toLowerCase().trim();
@@ -54,9 +55,10 @@ export async function scoutItunesArtists(
         if (!sameArtistFamily(artist, t.artist)) continue;
         const key = `${norm(t.artist)}|${norm(t.title)}`;
         if (seedKeys.has(key) || seen.has(key)) continue;
-        // genere: almeno un seed nella stessa family
+        // genere: almeno un seed nella stessa family + club only
         const ok = picked.some((s) => familyOk(s.genre, t));
         if (!ok) continue;
+        if (!isClubDig(t, artists)) continue;
         seen.add(key);
         out.push(t);
         if (out.length >= limit) break;

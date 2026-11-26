@@ -6,6 +6,7 @@
 
 import type { Track } from "../types";
 import { resolveGenre } from "../genres";
+import { rejectNonClubStyles } from "../engines/clubFilter";
 
 const UA = "OvunqueDiglist/1.0 +https://ovunque.apps.grok.bot";
 
@@ -84,8 +85,10 @@ function isRealLabel(label: string): boolean {
   if (l.length < 3) return false;
   if (BAD_LABELS.has(l)) return false;
   if (/^[\d\W]+$/.test(l)) return false;
-  // scarta meme / spam corti
   if (l.length <= 2) return false;
+  // aggregatori / distro ≠ label digger
+  if (/distribution|distro\b|sue.?tunes|full of nothing|apollon records/i.test(l))
+    return false;
   return true;
 }
 
@@ -107,26 +110,35 @@ function styleOverlap(a: string[], b: string[]): number {
   return n;
 }
 
-/** Stili compatibili — niente house su pick minimal/Villalobos. */
-function stylesCompatible(seedStyles: string[], hitStyles: string[]): boolean {
-  if (!hitStyles.length) return true; // Discogs a volte senza style
+/** Stili compatibili — solo club; senza style = ok solo discografia stesso artista. */
+function stylesCompatible(
+  seedStyles: string[],
+  hitStyles: string[],
+  via = "",
+): boolean {
+  // Nessuno style reale: solo se è la discografia dell'artista del pick
+  if (!hitStyles.length) {
+    return via.startsWith("artist:");
+  }
+  if (rejectNonClubStyles(hitStyles)) return false;
+
   if (!seedStyles.length) return true;
   if (styleOverlap(seedStyles, hitStyles) > 0) return true;
   const seed = seedStyles.map((s) => s.toLowerCase()).join(" ");
   const hit = hitStyles.map((s) => s.toLowerCase()).join(" ");
-  const housey = /house|tech house|deep house|afro|disco|garage/;
+  const housey = /house|tech house|deep house|garage/;
   const technoy = /techno|minimal|microhouse|acid|industrial|dub techno/;
-  const seedTechno = technoy.test(seed) && !/^house$/.test(seed.trim());
+  const seedTechno = technoy.test(seed);
   const seedHouse = housey.test(seed) && !technoy.test(seed);
   const hitTechno = technoy.test(hit);
   const hitHouse = housey.test(hit) && !/tech house|microhouse/.test(hit);
 
   if (seedTechno && hitTechno) return true;
   if (seedHouse && hitHouse) return true;
-  if (seedTechno && hitHouse) return false; // Villalobos ≠ Linkwood
+  if (seedTechno && hitHouse) return false;
   if (seedHouse && hitTechno && !/tech house/.test(hit)) return false;
-  // Electronic generico + hit minimal/techno/house: ok solo se overlap soft
-  if (/electronic|dance/.test(seed) && (hitTechno || hitHouse)) return true;
+  if (/electronic|minimal|techno|house|dance/.test(seed) && (hitTechno || hitHouse))
+    return true;
   return false;
 }
 
@@ -193,7 +205,7 @@ function bump(
   const { artist, title } = parseTitleArtist(hit.title ?? "");
   if (looksLikeSpam(artist, title)) return;
   const styles = hit.style ?? [];
-  if (!stylesCompatible(seedStyles, styles)) return;
+  if (!stylesCompatible(seedStyles, styles, via)) return;
 
   let row = map.get(hit.id);
   if (!row) {
@@ -262,7 +274,20 @@ export async function scoutDiscogsGraph(
 
     const styles = new Set<string>();
     const labels = new Set<string>();
-    const artists = new Set<string>([seed.artist]);
+    // Collab tipo «Mari & Villalobos» → preferisci il nome club (Villalobos)
+    const artists = new Set<string>();
+    const parts = seed.artist
+      .split(/\s*(?:&|,|feat\.?|ft\.?|x)\s*/i)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 1);
+    const clubNames = parts.filter((p) =>
+      /villalobos|luciano|reboot|gtronic|cinelli|ludwig|mills|plastikman|moodymann|omar-?s/i.test(
+        p,
+      ),
+    );
+    (clubNames.length ? clubNames : parts.length ? parts : [seed.artist]).forEach(
+      (a) => artists.add(a),
+    );
     if (seed.genre) styles.add(seed.genre);
 
     for (const h of hits.slice(0, 4)) {
@@ -335,7 +360,8 @@ export async function scoutDiscogsGraph(
               label: r.label ? [r.label] : [],
               year: r.year ? String(r.year) : undefined,
               thumb: r.thumb,
-              style: meta.styles,
+              // niente style finti del seed — solo artist: via
+              style: [],
               genre: ["Electronic"],
             },
             i,
@@ -402,7 +428,8 @@ export async function scoutDiscogsGraph(
               label: [label],
               year: r.year ? String(r.year) : undefined,
               thumb: r.thumb,
-              style: meta.styles,
+              // senza style reali Discogs → scartati (niente Lenta ereditata)
+              style: [],
               genre: ["Electronic"],
             },
             i,

@@ -13,6 +13,7 @@
 import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
 import type { Track } from "../types";
+import { isClubDig } from "./clubFilter";
 import {
   loadBandcampProfile,
   loadFanLibrary,
@@ -174,6 +175,8 @@ function bumpHit(
   if (isJunk(track.artist, track.title)) return;
   if (seeds.length && isSeedOrOwned(track, seeds, ownedKeys)) return;
   if (seeds.length && !isCorrelated(seeds, track, reason)) return;
+  const seedHints = seeds.map((s) => s.artist);
+  if (!isClubDig(track, seedHints)) return;
   const key = itemKey(track.artist, track.title);
   const prev = map.get(key);
   if (!prev) {
@@ -356,9 +359,11 @@ export async function runDiglistSocial(
     }
   }
 
+  const seedHints = seeds.map((s) => s.artist);
   let ranked = Array.from(hits.values())
     .filter((h) => h.score >= 70)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
+    .filter((h) => isClubDig(h.track, seedHints))
     .filter((h) => !/mickey|topolino|disney/i.test(`${h.track.title} ${h.track.artist}`))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
