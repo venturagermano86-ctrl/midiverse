@@ -66,10 +66,73 @@ VOICE_MAP = {
     "aria": "en-US-AriaNeural",
     "sonia": "en-GB-SoniaNeural",
     "guy": "en-US-GuyNeural",
+    "brian": "en-US-BrianNeural",
+    "michelle": "en-US-MichelleNeural",
+    "emma": "en-US-EmmaNeural",
+    "ana": "en-US-AnaNeural",
+    "natasha": "en-AU-NatashaNeural",
+    "libby": "en-GB-LibbyNeural",
+    "roger": "en-US-RogerNeural",
 }
 
 
-async def tts_phrase(text: str, voice: str, rate: int, pitch_hz: int, dest: Path) -> None:
+def elevenlabs_available() -> bool:
+    return bool(os.environ.get("ELEVENLABS_API_KEY", "").strip())
+
+
+def tts_elevenlabs(text: str, voice_id: str, dest: Path) -> bool:
+    """High-quality singer-style TTS via ElevenLabs. Returns False on failure."""
+    api_key = os.environ.get("ELEVENLABS_API_KEY", "").strip()
+    if not api_key or not voice_id:
+        return False
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+    body = _json.dumps(
+        {
+            "text": text,
+            "model_id": "eleven_multilingual_v2",
+            "voice_settings": {
+                "stability": 0.35,
+                "similarity_boost": 0.8,
+                "style": 0.55,
+                "use_speaker_boost": True,
+            },
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        url,
+        data=body,
+        headers={
+            "xi-api-key": api_key,
+            "Content-Type": "application/json",
+            "Accept": "audio/mpeg",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            dest.write_bytes(resp.read())
+        return dest.exists() and dest.stat().st_size > 500
+    except (urllib.error.URLError, urllib.error.HTTPError, TimeoutError):
+        return False
+
+
+async def tts_phrase(
+    text: str,
+    voice: str,
+    rate: int,
+    pitch_hz: int,
+    dest: Path,
+    *,
+    eleven_voice_id: str = "",
+) -> None:
+    # Prefer ElevenLabs singer voices when the secret is set
+    if eleven_voice_id and tts_elevenlabs(text, eleven_voice_id, dest):
+        return
+
     import edge_tts
 
     pitch = f"{pitch_hz:+d}Hz"
@@ -85,20 +148,64 @@ def mp3_to_wav(mp3: Path, wav: Path) -> None:
     )
 
 
-def process_phrase(x: np.ndarray, wet: bool) -> np.ndarray:
+def process_phrase(x: np.ndarray, wet: bool, dsp: str = "airy") -> np.ndarray:
     x = x / (np.max(np.abs(x)) + 1e-9)
-    x = x * (np.abs(x) > 0.012)
-    warm = one_pole(x, 0.2)
-    air = x - one_pole(x, 0.05)
-    y = 0.75 * warm + 0.25 * air
-    y = np.tanh(y * 1.25) * 0.92
-    out = np.zeros(len(y) + int(1.2 * SR))
-    out[: len(y)] += y * (0.95 if not wet else 0.7)
-    taps = [(40, 0.12), (260, 0.16), (520, 0.08)] if not wet else [(48, 0.1), (340, 0.28), (680, 0.14), (980, 0.08)]
-    for dms, g in taps:
+    x = x * (np.abs(x) > 0.01)
+    if dsp == "chest":
+        warm = one_pole(x, 0.28)
+        air = x - one_pole(x, 0.08)
+        y = 0.88 * warm + 0.12 * air
+        y = np.tanh(y * 1.15) * 0.95
+        dry_g, wet_g = 0.96, 0.62
+        taps_dry = [(35, 0.1), (220, 0.12), (480, 0.06)]
+        taps_wet = [(55, 0.12), (380, 0.32), (760, 0.16), (1100, 0.09)]
+    elif dsp == "cold":
+        warm = one_pole(x, 0.12)
+        air = x - one_pole(x, 0.03)
+        y = 0.45 * warm + 0.55 * air
+        y = np.tanh(y * 1.4) * 0.88
+        dry_g, wet_g = 0.9, 0.55
+        taps_dry = [(20, 0.08), (140, 0.1), (400, 0.05)]
+        taps_wet = [(30, 0.1), (280, 0.22), (560, 0.12), (900, 0.06)]
+    elif dsp == "punch":
+        warm = one_pole(x, 0.18)
+        air = x - one_pole(x, 0.04)
+        y = 0.65 * warm + 0.35 * air
+        y = np.tanh(y * 1.45) * 0.9
+        dry_g, wet_g = 0.94, 0.68
+        taps_dry = [(25, 0.14), (180, 0.14), (360, 0.07)]
+        taps_wet = [(40, 0.12), (300, 0.26), (600, 0.12), (850, 0.07)]
+    elif dsp == "warm":
+        warm = one_pole(x, 0.24)
+        air = x - one_pole(x, 0.06)
+        y = 0.8 * warm + 0.2 * air
+        y = np.tanh(y * 1.2) * 0.93
+        dry_g, wet_g = 0.94, 0.7
+        taps_dry = [(45, 0.11), (250, 0.15), (500, 0.08)]
+        taps_wet = [(60, 0.11), (360, 0.3), (720, 0.15), (1050, 0.08)]
+    else:  # airy / celestial
+        warm = one_pole(x, 0.16)
+        air = x - one_pole(x, 0.035)
+        y = 0.55 * warm + 0.45 * air
+        y = np.tanh(y * 1.18) * 0.9
+        dry_g, wet_g = 0.88, 0.72
+        taps_dry = [(50, 0.1), (300, 0.18), (640, 0.1)]
+        taps_wet = [(70, 0.12), (420, 0.34), (840, 0.18), (1280, 0.1)]
+
+    # Soft time-stretch feel: hold tails longer for airy/chest
+    max_tap_ms = max(dms for dms, _ in (taps_wet if wet else taps_dry))
+    tail = int((0.9 if dsp in ("airy", "chest") else 0.55) * SR) + int(
+        SR * max_tap_ms / 1000
+    )
+    out = np.zeros(len(y) + tail)
+    out[: len(y)] += y * (dry_g if not wet else wet_g)
+    for dms, g in taps_dry if not wet else taps_wet:
         off = int(SR * dms / 1000)
-        out[off : off + len(y)] += y * g
-    fade = int(0.03 * SR)
+        end = min(len(out), off + len(y))
+        if off >= len(out):
+            continue
+        out[off:end] += y[: end - off] * g
+    fade = int(0.04 * SR)
     out[:fade] *= np.linspace(0, 1, min(fade, len(out)))
     out[-fade:] *= np.linspace(1, 0, min(fade, len(out)))
     return out / (np.max(np.abs(out)) + 1e-9) * 0.92
@@ -137,27 +244,51 @@ def main() -> int:
     bpm = float(cfg.get("bpm", 124))
     mode = cfg.get("mode", "generate")  # generate | overlay | reference
     voice_key = cfg.get("voice", "jenny")
+    wet_voice_key = cfg.get("wetVoice") or voice_key
     rate = int(cfg.get("rate", -18))
     pitch_hz = int(cfg.get("pitchHz", 0))
     dry_phrases = cfg.get("dry", ["hold the mark"])
     wet_phrases = cfg.get("wet", ["don't let go"])
+    dsp = str(cfg.get("dsp") or "punch")
+    eleven_dry = str(cfg.get("elevenVoiceId") or "")
+    eleven_wet = str(cfg.get("elevenWetVoiceId") or eleven_dry)
+    singer_label = str(cfg.get("singerLabel") or "")
     track_path = cfg.get("trackPath") or ""
     analysis_meta = cfg.get("analysis") or {}
+    engine = "elevenlabs" if elevenlabs_available() and eleven_dry else "edge-tts"
 
-    # Reference mode: analyze uploaded track → original similar vocal params
-    if mode == "reference" and track_path and Path(track_path).exists():
-        import analyze_reference
+    user_bpm = cfg.get("userBpm")
+    key_id = str(cfg.get("key") or "Am")
 
-        analysis_meta = analyze_reference.analyze(Path(track_path))
+    # Reference mode: audio analysis, or precomputed meta (YouTube title fallback)
+    if mode == "reference":
+        if track_path and Path(track_path).exists():
+            import analyze_reference
+
+            analysis_meta = analyze_reference.analyze(Path(track_path))
+        elif analysis_meta:
+            pass  # already provided (e.g. YouTube oEmbed mood)
+        else:
+            raise SystemExit("reference mode needs trackPath or analysis")
+
         voice_key = analysis_meta["voice"]
+        wet_voice_key = analysis_meta.get("wetVoice") or voice_key
         rate = int(analysis_meta["rate"])
         pitch_hz = int(analysis_meta["pitchHz"])
         dry_phrases = analysis_meta["dry"]
         wet_phrases = analysis_meta["wet"]
-        if analysis_meta.get("bpm"):
+        dsp = str(analysis_meta.get("dsp") or "airy")
+        if user_bpm is not None:
+            bpm = float(user_bpm)
+        elif analysis_meta.get("bpm"):
             bpm = float(analysis_meta["bpm"])
+        analysis_meta["key"] = key_id
+        analysis_meta["bpm"] = round(float(bpm), 1)
+    elif user_bpm is not None:
+        bpm = float(user_bpm)
 
     voice = VOICE_MAP.get(voice_key, VOICE_MAP["jenny"])
+    wet_voice = VOICE_MAP.get(wet_voice_key, voice)
     n = int(SR * length_sec)
     mix = np.zeros(n)
 
@@ -171,17 +302,38 @@ def main() -> int:
             files = []
             for i, phrase in enumerate(dry_phrases):
                 mp3 = td_path / f"dry{i}.mp3"
-                tasks.append(tts_phrase(phrase, voice, rate, pitch_hz, mp3))
+                tasks.append(
+                    tts_phrase(
+                        phrase,
+                        voice,
+                        rate,
+                        pitch_hz,
+                        mp3,
+                        eleven_voice_id=eleven_dry,
+                    )
+                )
                 files.append(("dry", i, mp3))
             for i, phrase in enumerate(wet_phrases):
                 mp3 = td_path / f"wet{i}.mp3"
-                tasks.append(tts_phrase(phrase, voice, rate, pitch_hz - 1, mp3))
+                # Answer voice: different neural + slightly lower / wetter
+                tasks.append(
+                    tts_phrase(
+                        phrase,
+                        wet_voice,
+                        rate - 2,
+                        pitch_hz - 3,
+                        mp3,
+                        eleven_voice_id=eleven_wet or eleven_dry,
+                    )
+                )
                 files.append(("wet", i, mp3))
             await asyncio.gather(*tasks)
             for kind, i, mp3 in files:
                 wav = mp3.with_suffix(".wav")
                 mp3_to_wav(mp3, wav)
-                buf = process_phrase(load_wav_mono(wav), wet=(kind == "wet"))
+                buf = process_phrase(
+                    load_wav_mono(wav), wet=(kind == "wet"), dsp=dsp
+                )
                 if kind == "dry":
                     dry_bufs.append(buf)
                 else:
@@ -192,14 +344,15 @@ def main() -> int:
         vocal = np.zeros(n)
         beat = 60.0 / bpm
         bar = beat * 4
-        # Place call/response across the length
-        slots = max(2, int(length_sec / 8))
+        # Place call/response — spacing varies with dsp mood
+        gap = 1.7 if dsp in ("airy", "chest") else 2.0
+        slots = max(2, int(length_sec / (6 if dsp in ("airy", "chest") else 8)))
         for s in range(slots):
-            t0 = (1 + s * 2) * bar
+            t0 = (0.75 + s * gap) * bar
             if t0 * SR >= n:
                 break
-            place(vocal, dry_bufs[s % len(dry_bufs)], t0, 0.9)
-            place(vocal, wet_bufs[s % len(wet_bufs)], t0 + bar * 0.85, 0.78)
+            place(vocal, dry_bufs[s % len(dry_bufs)], t0, 0.92)
+            place(vocal, wet_bufs[s % len(wet_bufs)], t0 + bar * 0.9, 0.8)
 
         if args.bed_out:
             L = vocal
@@ -242,9 +395,11 @@ def main() -> int:
             bed[:, 1] += np.roll(vocal, 12) * 0.8
             mix_L, mix_R = bed[:, 0], bed[:, 1]
         else:
-            bed = build_bed(n, bpm) * 0.85
-            mix_L = bed + vocal
-            mix_R = bed + np.roll(vocal, 12) * 0.95
+            # Quiet bed so the vocal character is obvious when comparing refs
+            bed_gain = 0.45 if mode == "reference" else 0.85
+            bed = build_bed(n, bpm) * bed_gain
+            mix_L = bed + vocal * 1.05
+            mix_R = bed + np.roll(vocal, 12) * 1.0
 
         mix_L = np.tanh(mix_L * 1.05)
         mix_R = np.tanh(mix_R * 1.05)
@@ -266,8 +421,28 @@ def main() -> int:
             stderr=subprocess.DEVNULL,
         )
         payload = {"wav": str(out), "mp3": str(mp3)}
-        if analysis_meta:
-            payload["analysis"] = analysis_meta
+        if not analysis_meta:
+            analysis_meta = {
+                "bpm": round(float(bpm), 1),
+                "key": key_id,
+                "label": singer_label or "Custom",
+                "note": f"BPM {round(float(bpm))} · chiave {key_id}",
+            }
+        else:
+            analysis_meta.setdefault("bpm", round(float(bpm), 1))
+            analysis_meta["key"] = key_id
+            if singer_label:
+                analysis_meta["label"] = singer_label
+        analysis_meta["engine"] = engine
+        if engine == "elevenlabs":
+            analysis_meta["note"] = (
+                "Motore cantante AI (ElevenLabs) — voci con licenza, non cloni di star."
+            )
+        elif not analysis_meta.get("note"):
+            analysis_meta["note"] = (
+                "Demo edge-tts. Aggiungi ELEVENLABS_API_KEY per voci cantante reali."
+            )
+        payload["analysis"] = analysis_meta
         print(json.dumps(payload))
     return 0
 

@@ -14,6 +14,9 @@ House tracks always need vocals. Produce **short club hooks**, not full verse es
 - Prefer **English or Italian** club English: 2–6 words per hit, easy to chop.
 - Sit behind the groove — hooks that can enter/exit in 8-bar cells.
 - Never put Stereo Delay (`GV 1-4 Dotted Stereo`) on vox (synth/pad/stab only).
+- **Melodic / human**, not flat robot TTS. Prefer ElevenLabs `eleven_v3` + `[sings][softly][drawn out]` short lines (`melodic-house-vocals`, `elevenlabs-sung-hooks`).
+- Never fake elongations (`sooooft`) — they sound more robotic.
+- Release-ready only with **paid** licensed AI voices (no celebrity clones).
 
 ## Workflow (every request)
 1. Ask only if BPM/key/title are totally missing; otherwise infer from context or pick a working house default (122–126 BPM).
@@ -41,5 +44,6 @@ House tracks always need vocals. Produce **short club hooks**, not full verse es
 - Mute/enter by 8-bar cells with the hats/clap arrangement, not static forever.
 
 ## Companion skills
+- `melodic-house-vocals`, `elevenlabs-sung-hooks` (cantato umano)
 - `hook-writer`, `lyrics-writer`, `chorus-builder`, `melody-writer`, `prosody-checker`
 - `music-prompt-engineer`, `ai-song-formatter`, ElevenLabs `music`
