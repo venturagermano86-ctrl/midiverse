@@ -135,9 +135,9 @@ function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
     if (seen.has(key)) continue;
     const a = h.track.artist.toLowerCase();
     const l = (h.track.label || "").toLowerCase();
-    // Reti dense (All Inn / Perlon…): più pezzi per label, non un dump genere
-    if ((perArtist.get(a) ?? 0) >= 5) continue;
-    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 8) continue;
+    // Poco dello stesso artista — preferisci label mates diversi
+    if ((perArtist.get(a) ?? 0) >= 2) continue;
+    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 6) continue;
     out.push(h);
     seen.add(key);
     perArtist.set(a, (perArtist.get(a) ?? 0) + 1);
