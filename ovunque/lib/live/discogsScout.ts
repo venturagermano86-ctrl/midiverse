@@ -107,20 +107,26 @@ function styleOverlap(a: string[], b: string[]): number {
   return n;
 }
 
-/** Stili compatibili house/techno family — soft. */
+/** Stili compatibili — niente house su pick minimal/Villalobos. */
 function stylesCompatible(seedStyles: string[], hitStyles: string[]): boolean {
-  if (!seedStyles.length) return true;
   if (!hitStyles.length) return true; // Discogs a volte senza style
+  if (!seedStyles.length) return true;
   if (styleOverlap(seedStyles, hitStyles) > 0) return true;
   const seed = seedStyles.map((s) => s.toLowerCase()).join(" ");
   const hit = hitStyles.map((s) => s.toLowerCase()).join(" ");
-  const housey = /house|tech house|deep house|afro|disco/;
-  const technoy = /techno|minimal|acid|industrial/;
-  if (housey.test(seed) && housey.test(hit)) return true;
-  if (technoy.test(seed) && technoy.test(hit)) return true;
-  if (housey.test(seed) && technoy.test(hit)) return false;
-  if (technoy.test(seed) && housey.test(hit) && !/tech house/.test(hit))
-    return false;
+  const housey = /house|tech house|deep house|afro|disco|garage/;
+  const technoy = /techno|minimal|microhouse|acid|industrial|dub techno/;
+  const seedTechno = technoy.test(seed) && !/^house$/.test(seed.trim());
+  const seedHouse = housey.test(seed) && !technoy.test(seed);
+  const hitTechno = technoy.test(hit);
+  const hitHouse = housey.test(hit) && !/tech house|microhouse/.test(hit);
+
+  if (seedTechno && hitTechno) return true;
+  if (seedHouse && hitHouse) return true;
+  if (seedTechno && hitHouse) return false; // Villalobos ≠ Linkwood
+  if (seedHouse && hitTechno && !/tech house/.test(hit)) return false;
+  // Electronic generico + hit minimal/techno/house: ok solo se overlap soft
+  if (/electronic|dance/.test(seed) && (hitTechno || hitHouse)) return true;
   return false;
 }
 

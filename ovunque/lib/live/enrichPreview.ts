@@ -8,10 +8,41 @@ function norm(s: string): string {
     .trim();
 }
 
+/** Cover/spazzatura da scartare (Topolino, kids, cartoon…). */
+function isJunkArt(url?: string, title?: string, artist?: string): boolean {
+  const blob = `${url ?? ""} ${title ?? ""} ${artist ?? ""}`.toLowerCase();
+  if (/mickey|topolino|disney|clubhouse|frozen|peppa|barbie|pokemon/i.test(blob))
+    return true;
+  return false;
+}
+
+function artistTitleMatch(
+  hit: { title: string; artist: string },
+  artist: string,
+  title: string,
+): boolean {
+  const nt = norm(title);
+  const na = norm(artist);
+  const ht = norm(hit.title);
+  const ha = norm(hit.artist);
+  if (!nt || !na || !ht || !ha) return false;
+  const titleOk = ht === nt || ht.includes(nt) || nt.includes(ht);
+  const artistOk =
+    ha === na || ha.includes(na) || na.includes(ha.split(" ")[0] || na);
+  // titolo corto genérico ("coast to coast") → serve artista stretto
+  if (nt.length <= 14) return ht === nt && artistOk;
+  return titleOk && artistOk;
+}
+
 /**
- * Per i dig consigliati senza preview: attacca previewUrl (+ artwork) da iTunes.
+ * Preview iTunes SOLO con match artista+titolo.
+ * Mai fallback genere (attaccava Topolino / kids su dig underground).
+ * Artwork solo se match stretto — mai copertina a caso.
  */
-export async function enrichPreviews(tracks: Track[], concurrency = 4): Promise<Track[]> {
+export async function enrichPreviews(
+  tracks: Track[],
+  concurrency = 4,
+): Promise<Track[]> {
   const out = [...tracks];
   const need = out
     .map((t, i) => ({ t, i }))
@@ -22,31 +53,25 @@ export async function enrichPreviews(tracks: Track[], concurrency = 4): Promise<
     await Promise.all(
       batch.map(async ({ t, i }) => {
         try {
-          const hits = await itunesSearch(`${t.artist} ${t.title}`, 5);
-          const nt = norm(t.title);
-          const na = norm(t.artist);
-          let match =
-            hits.find(
-              (h) =>
-                norm(h.title) === nt &&
-                (norm(h.artist) === na ||
-                  norm(h.artist).includes(na) ||
-                  na.includes(norm(h.artist))),
-            ) ||
-            hits.find((h) => norm(h.title).includes(nt) || nt.includes(norm(h.title))) ||
-            hits.find((h) => !!h.previewUrl);
-
-          // Catalogo curato demo: niente match → preview del genere (sempre ▶)
-          if (!match?.previewUrl) {
-            const genreQ = `${t.genre || "electronic"} ${t.mood || "house"}`.trim();
-            const genreHits = await itunesSearch(genreQ, 8);
-            match = genreHits.find((h) => !!h.previewUrl) ?? genreHits[0];
+          if (isJunkArt(t.artworkUrl, t.title, t.artist)) {
+            out[i] = { ...t, artworkUrl: undefined };
           }
+          const hits = await itunesSearch(`${t.artist} ${t.title}`, 8);
+          const match = hits.find(
+            (h) =>
+              !!h.previewUrl &&
+              artistTitleMatch(h, t.artist, t.title) &&
+              !isJunkArt(h.artworkUrl, h.title, h.artist),
+          );
           if (!match?.previewUrl) return;
           out[i] = {
-            ...t,
+            ...out[i],
             previewUrl: match.previewUrl,
-            artworkUrl: t.artworkUrl || match.artworkUrl,
+            artworkUrl:
+              out[i].artworkUrl ||
+              (match.artworkUrl && !isJunkArt(match.artworkUrl)
+                ? match.artworkUrl
+                : undefined),
           };
         } catch {
           /* leave without preview */
@@ -58,31 +83,25 @@ export async function enrichPreviews(tracks: Track[], concurrency = 4): Promise<
   return out;
 }
 
-/** Singola traccia: artist + title → preview iTunes. */
+/** Singola traccia: artist + title → preview iTunes (match stretto). */
 export async function lookupPreview(
   artist: string,
   title: string,
 ): Promise<{ previewUrl?: string; artworkUrl?: string } | null> {
   if (!artist || !title) return null;
   try {
-    const hits = await itunesSearch(`${artist} ${title}`, 5);
-    const nt = norm(title);
-    const na = norm(artist);
-    let match =
-      hits.find((h) => norm(h.title) === nt && norm(h.artist).includes(na)) ||
-      hits.find((h) => norm(h.title).includes(nt)) ||
-      hits.find((h) => !!h.previewUrl);
-
-    if (!match?.previewUrl) {
-      const genreHits = await itunesSearch(`electronic ${artist}`.slice(0, 80), 8);
-      match = genreHits.find((h) => !!h.previewUrl) ?? genreHits[0];
-    }
-    if (!match?.previewUrl) {
-      const fallback = await itunesSearch("deep house techno", 6);
-      match = fallback.find((h) => !!h.previewUrl) || match;
-    }
+    const hits = await itunesSearch(`${artist} ${title}`, 8);
+    const match = hits.find(
+      (h) =>
+        !!h.previewUrl &&
+        artistTitleMatch(h, artist, title) &&
+        !isJunkArt(h.artworkUrl, h.title, h.artist),
+    );
     if (!match?.previewUrl) return null;
-    return { previewUrl: match.previewUrl, artworkUrl: match.artworkUrl };
+    return {
+      previewUrl: match.previewUrl,
+      artworkUrl: isJunkArt(match.artworkUrl) ? undefined : match.artworkUrl,
+    };
   } catch {
     return null;
   }
