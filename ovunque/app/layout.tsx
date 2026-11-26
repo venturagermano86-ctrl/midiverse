@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
 import { CollectionProvider } from "@/components/CollectionProvider";
 import { SiteHeader } from "@/components/SiteHeader";
+import { VoiceOrb } from "@/components/VoiceOrb";
 import "./globals.css";
 
 const archivo = Archivo({
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               . powered by <span className="font-black tracking-wider text-signal">MIDIVRS</span>
             </p>
           </footer>
+          <VoiceOrb />
         </CollectionProvider>
       </body>
     </html>
