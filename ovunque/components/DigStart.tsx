@@ -20,8 +20,9 @@ const MODES: { id: Mode; label: string }[] = [
 const MAX_PICKS = 6;
 
 /**
- * 1) Cerca / screenshot / foto → tracce ESATTE
- * 2) Cuore o seleziona → poi Short / Long / Station (suggerite)
+ * Screenshot / foto → traccia ESATTA.
+ * Cuore → wishlist = collezione.
+ * Seleziona (tap) → Short / Long / Station (suggerite).
  */
 export function DigStart({ className = "" }: { className?: string }) {
   const router = useRouter();
@@ -35,7 +36,7 @@ export function DigStart({ className = "" }: { className?: string }) {
   const [kind, setKind] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
-  /** true dopo screenshot/foto: Station bloccata finché cuore/pick */
+  /** Dopo screenshot: Station solo se cuore (collezione) o pick list */
   const [gateSuggest, setGateSuggest] = useState(false);
 
   useEffect(() => {
@@ -47,28 +48,6 @@ export function DigStart({ className = "" }: { className?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Cuore sulla wishlist → conta come selezione per list/station
-  useEffect(() => {
-    if (!ready || !tracks.length) return;
-    setPicked((prev) => {
-      const hearted = tracks.filter((t) => has(t.id)).map((t) => t.id);
-      if (!hearted.length) return prev;
-      const next = [...prev];
-      for (const id of hearted) {
-        if (!next.includes(id) && next.length < MAX_PICKS) next.push(id);
-      }
-      return next;
-    });
-  }, [ready, tracks, has]);
-
-  function activatePick(id: string) {
-    setPicked((prev) => {
-      if (prev.includes(id)) return prev;
-      if (prev.length >= MAX_PICKS) return prev;
-      return [...prev, id];
-    });
-  }
-
   function togglePick(id: string) {
     setPicked((prev) => {
       if (prev.includes(id)) return prev.filter((x) => x !== id);
@@ -77,11 +56,13 @@ export function DigStart({ className = "" }: { className?: string }) {
     });
   }
 
-  function onHeartToggle(track: Track, wishlisted: boolean) {
-    if (wishlisted) activatePick(track.id);
-    else {
-      setPicked((prev) => prev.filter((x) => x !== track.id));
-    }
+  /** Cuore = solo wishlist/collezione — non seed Diglist. */
+  function onHeartToggle(_track: Track, wishlisted: boolean) {
+    setStatus(
+      wishlisted
+        ? "♥ In wishlist — fa parte della tua collezione"
+        : "Tolta dalla wishlist / collezione",
+    );
   }
 
   async function runStart(query: string, m: Mode = mode) {
@@ -112,7 +93,7 @@ export function DigStart({ className = "" }: { className?: string }) {
       setKind(data.kind || m);
       setStatus(
         hits.length
-          ? `${data.note || "Ok"} — cuore o seleziona, poi Short / Long / Station`
+          ? `${data.note || "Ok"} — ♥ wishlist/collezione · tap per Short/Long/Station`
           : "Nessun hit — prova artista, label: Perlon, o un link YouTube",
       );
     } catch {
@@ -163,11 +144,10 @@ export function DigStart({ className = "" }: { className?: string }) {
       }
       setTracks(hits);
       setKind("screenshot-exact");
-      // Nessuna auto-selezione: list/station solo dopo cuore o tap
       setPicked([]);
       setStatus(
         hits.length
-          ? `Trovate ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non in catalogo` : ""}. Cuore o seleziona → poi Short / Long / Station`
+          ? `Trovate ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non in catalogo` : ""}. ♥ → wishlist/collezione · tap → Short/Long/Station`
           : "OCR letto ma nessuna traccia esatta — ritaglia meglio o cerca a mano",
       );
     } catch {
@@ -180,7 +160,7 @@ export function DigStart({ className = "" }: { className?: string }) {
   function goDig(listMode: "short" | "long") {
     const seeds = tracks.filter((t) => picked.includes(t.id)).slice(0, MAX_PICKS);
     if (!seeds.length) {
-      setStatus("Prima cuore o seleziona almeno 1 traccia, poi Short / Long");
+      setStatus("Seleziona (tap) almeno 1 traccia per Short / Long — il cuore va in wishlist");
       return;
     }
     const bag = stashDigPicks(listMode, seeds);
@@ -193,6 +173,12 @@ export function DigStart({ className = "" }: { className?: string }) {
   const pickedTracks = tracks.filter((t) => picked.includes(t.id));
   const suggestReady = pickedTracks.length > 0;
 
+  function stationOpen(id: string) {
+    if (!gateSuggest) return true;
+    // Dopo screenshot: Station se in collezione (cuore) o pickata per list
+    return picked.includes(id) || (ready && has(id));
+  }
+
   return (
     <section
       className={`rounded-dig-lg border border-line bg-panel p-5 md:p-6 ${className}`}
@@ -204,9 +190,9 @@ export function DigStart({ className = "" }: { className?: string }) {
         Parti da tutto
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-soft">
-        Screenshot / foto / link → trovi <strong className="font-semibold text-mist">quella</strong>{" "}
-        traccia. Poi cuore o seleziona: così si attivano Short list, Long list o Station con le
-        suggerite (rete label).
+        Screenshot / foto → trovi{" "}
+        <strong className="font-semibold text-mist">quella</strong> traccia. Cuore → wishlist e
+        entra in collezione. Tap per selezionare → Short / Long / Station (suggerite).
       </p>
 
       <div className="mt-4 flex flex-wrap gap-1.5">
@@ -315,7 +301,7 @@ export function DigStart({ className = "" }: { className?: string }) {
         <div className="mt-6">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <h3 className="font-display text-lg font-black text-mist">
-              {gateSuggest ? "Tracce esatte" : "Risultati"} · cuore o tap (
+              {gateSuggest ? "Tracce esatte" : "Risultati"} · ♥ wishlist · tap list (
               {picked.length}/{MAX_PICKS})
             </h3>
             {suggestReady ? (
@@ -337,25 +323,27 @@ export function DigStart({ className = "" }: { className?: string }) {
               </div>
             ) : (
               <p className="text-[0.7rem] font-bold uppercase tracking-wider text-muted">
-                Cuore o seleziona → Short / Long / Station
+                ♥ collezione · tap → Short / Long / Station
               </p>
             )}
           </div>
           <ul className="mb-4 flex flex-wrap gap-1.5">
             {tracks.slice(0, 28).map((t) => {
               const on = picked.includes(t.id);
+              const wished = ready && has(t.id);
               return (
                 <li key={t.id}>
                   <button
                     type="button"
                     onClick={() => togglePick(t.id)}
-                    className={`max-w-[14rem] truncate rounded-dig border px-2 py-1 text-left text-[0.7rem] transition ${
+                    className={`max-w-[16rem] truncate rounded-dig border px-2 py-1 text-left text-[0.7rem] transition ${
                       on
                         ? "border-signal bg-signal/15 text-mist"
                         : "border-line text-muted hover:border-signal/40"
                     }`}
                     title={`${t.artist} — ${t.title}`}
                   >
+                    {wished ? "♥ " : ""}
                     {on ? "✓ " : ""}
                     {t.artist} — {t.title}
                   </button>
@@ -367,9 +355,7 @@ export function DigStart({ className = "" }: { className?: string }) {
             tracks={tracks}
             showRank={false}
             onHeartToggle={onHeartToggle}
-            stationUnlocked={
-              gateSuggest ? (id) => picked.includes(id) : undefined
-            }
+            stationUnlocked={gateSuggest ? stationOpen : undefined}
           />
         </div>
       ) : null}

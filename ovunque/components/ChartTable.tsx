@@ -157,7 +157,7 @@ export function ChartTable({
                     {stationUnlocked && !stationUnlocked(track.id) ? (
                       <span
                         className="inline-flex items-center gap-1 rounded-dig border border-line px-2 py-1 text-[0.65rem] font-bold uppercase tracking-wider text-muted"
-                        title="Cuore o seleziona la traccia, poi Station"
+                        title="♥ wishlist/collezione o tap selezione, poi Station"
                       >
                         Station
                       </span>

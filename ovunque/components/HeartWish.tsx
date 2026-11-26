@@ -10,7 +10,7 @@ type Props = {
   onAfterToggle?: (track: Track, wishlisted: boolean) => void;
 };
 
-/** Cuore sulla cover → wishlist. */
+/** Cuore sulla cover → wishlist = collezione. */
 export function HeartWish({ track, className = "", onAfterToggle }: Props) {
   const { has, toggle, ready } = useCollection();
   const on = has(track.id);
@@ -19,8 +19,8 @@ export function HeartWish({ track, className = "", onAfterToggle }: Props) {
     <button
       type="button"
       disabled={!ready}
-      title={on ? "Togli dalla wishlist" : "Salva in wishlist"}
-      aria-label={on ? "Togli dalla wishlist" : "Salva in wishlist"}
+      title={on ? "Togli da wishlist / collezione" : "Cuore → wishlist / collezione"}
+      aria-label={on ? "Togli da wishlist / collezione" : "Salva in wishlist / collezione"}
       aria-pressed={on}
       onClick={(e) => {
         e.preventDefault();
