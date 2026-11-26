@@ -1,8 +1,8 @@
 "use client";
 
 import { Suspense } from "react";
+import { DigStart } from "@/components/DigStart";
 import { LiveSearch } from "@/components/LiveSearch";
-import { ScreenshotDig } from "@/components/ScreenshotDig";
 
 export default function SearchPage() {
   return (
@@ -14,11 +14,13 @@ export default function SearchPage() {
         Tracks
       </h1>
       <p className="mt-2 max-w-2xl text-sm text-soft">
-        Cerca, filtra solo digitale / solo vinile, apri e compra dal più economico — senza
-        perdere tempo. Oppure carica uno screenshot delle tue preferite.
+        Parti da artista, label, link YouTube/Bandcamp/Discogs, screenshot — poi Short/Long
+        sulla rete. Sotto: catalogo live digitale/vinile.
       </p>
       <div className="mt-8">
-        <ScreenshotDig />
+        <Suspense fallback={<p className="text-muted">Dig start…</p>}>
+          <DigStart />
+        </Suspense>
       </div>
       <Suspense fallback={<p className="mt-8 text-muted">Carico ricerca…</p>}>
         <div className="mt-12">

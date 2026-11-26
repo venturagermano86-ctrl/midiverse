@@ -21,6 +21,7 @@ export function SiteHeader() {
   function onSubmit(e: FormEvent) {
     e.preventDefault();
     const query = q.trim();
+    // /cerca apre Dig start (artista / label / link / YouTube / screenshot)
     router.push(query ? `/cerca?q=${encodeURIComponent(query)}` : "/cerca");
   }
 
@@ -62,7 +63,7 @@ export function SiteHeader() {
             id="search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search title, artist, label…"
+            placeholder="Artist, label, title, YouTube…"
             className="w-full bg-transparent text-sm text-mist outline-none placeholder:text-muted"
           />
           <button
