@@ -11,6 +11,11 @@ export {
 } from "./taxonomy";
 
 export {
+  BANDCAMP_TAG_SLUGS,
+  BEATPORT_LANE_SLUGS,
+} from "./bandcampTags";
+
+export {
   trackGenre,
   tracksInGenre,
   tracksInFamily,
