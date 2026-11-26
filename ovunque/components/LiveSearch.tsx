@@ -83,7 +83,7 @@ export function LiveSearch() {
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Cerca traccia o disco: artist, title…"
+          placeholder="Artista, titolo, label… oppure usa Dig start sopra per link/YouTube"
           className="w-full max-w-md rounded-dig border border-line bg-panel px-4 py-3 text-sm text-mist outline-none placeholder:text-muted focus:border-signal/60"
         />
 
