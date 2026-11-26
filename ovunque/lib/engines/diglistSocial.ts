@@ -53,9 +53,9 @@ export type DigSocialResult = {
 };
 
 const LIMITS = {
-  short: { buyers: 16, out: 30 },
-  long: { buyers: 56, out: 60 },
-  station: { buyers: 16, out: 24 },
+  short: { buyers: 16, out: 48 },
+  long: { buyers: 56, out: 90 },
+  station: { buyers: 16, out: 36 },
 } as const;
 
 function itemKey(artist: string, title: string): string {
@@ -129,8 +129,8 @@ function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
     if (seen.has(key)) continue;
     const a = h.track.artist.toLowerCase();
     const l = (h.track.label || "").toLowerCase();
-    if ((perArtist.get(a) ?? 0) >= 3) continue;
-    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 3) continue;
+    if ((perArtist.get(a) ?? 0) >= 4) continue;
+    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 5) continue;
     out.push(h);
     seen.add(key);
     perArtist.set(a, (perArtist.get(a) ?? 0) + 1);
@@ -316,7 +316,7 @@ export async function runDiglistSocial(
 
   // ——— Discogs RETE: artista → label → roster → hop artisti ———
   try {
-    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 40 : 28);
+    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 90 : 55);
     dg.tracks.forEach((t, i) => {
       const sameArtist = seeds.some((s) => {
         const names = s.artist

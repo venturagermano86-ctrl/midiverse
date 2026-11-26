@@ -8,7 +8,7 @@ import { sanitizeTrack } from "@/lib/sanitizeTrack";
 import type { Track } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 /** Diglist Short/Long — croce buyer×collezioni (genere solo filtri). */
 export async function POST(req: Request) {

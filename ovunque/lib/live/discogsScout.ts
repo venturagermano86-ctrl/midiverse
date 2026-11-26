@@ -70,6 +70,9 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const artistIdCache = new Map<string, number | null>();
+const labelIdCache = new Map<string, number | null>();
+
 async function discogsGet<T>(
   path: string,
   params: Record<string, string> = {},
@@ -83,6 +86,10 @@ async function discogsGet<T>(
       headers: { "User-Agent": UA, Accept: "application/json" },
       next: { revalidate: 0 },
     });
+    if (res.status === 429) {
+      await sleep(1200);
+      return null;
+    }
     if (!res.ok) return null;
     return (await res.json()) as T;
   } catch {
@@ -235,10 +242,12 @@ function bump(
 }
 
 async function resolveArtistId(name: string): Promise<number | null> {
+  const key = name.toLowerCase();
+  if (artistIdCache.has(key)) return artistIdCache.get(key) ?? null;
   const data = await discogsGet<{
     results?: { id?: number; title?: string }[];
   }>("/database/search", { q: name, type: "artist", per_page: "5" });
-  await sleep(220);
+  await sleep(160);
   const needle = name.toLowerCase();
   const hit = data?.results?.find(
     (r) =>
@@ -247,20 +256,26 @@ async function resolveArtistId(name: string): Promise<number | null> {
       (r.title.toLowerCase() === needle ||
         r.title.toLowerCase().includes(needle.slice(0, 10))),
   );
-  return hit?.id ?? data?.results?.[0]?.id ?? null;
+  const id = hit?.id ?? data?.results?.[0]?.id ?? null;
+  artistIdCache.set(key, id);
+  return id;
 }
 
 async function resolveLabelId(name: string): Promise<number | null> {
   if (!isRealLabel(name)) return null;
+  const key = name.toLowerCase();
+  if (labelIdCache.has(key)) return labelIdCache.get(key) ?? null;
   const data = await discogsGet<{
     results?: { id?: number; title?: string }[];
   }>("/database/search", { q: name, type: "label", per_page: "5" });
-  await sleep(220);
+  await sleep(160);
   const needle = name.toLowerCase();
   const exact = data?.results?.find(
     (r) => r.id && r.title && r.title.toLowerCase() === needle,
   );
-  return exact?.id ?? data?.results?.[0]?.id ?? null;
+  const id = exact?.id ?? data?.results?.[0]?.id ?? null;
+  labelIdCache.set(key, id);
+  return id;
 }
 
 async function artistReleases(artistId: number): Promise<ArtistRelease[]> {
@@ -276,11 +291,11 @@ async function artistReleases(artistId: number): Promise<ArtistRelease[]> {
       role?: string;
     }[];
   }>(`/artists/${artistId}/releases`, {
-    per_page: "30",
+    per_page: "40",
     sort: "year",
     sort_order: "desc",
   });
-  await sleep(220);
+  await sleep(160);
   const out: ArtistRelease[] = [];
   for (const r of data?.releases ?? []) {
     if (!r.id || r.type === "master") continue;
@@ -309,8 +324,8 @@ async function labelReleases(labelId: number): Promise<ArtistRelease[]> {
       year?: number;
       thumb?: string;
     }[];
-  }>(`/labels/${labelId}/releases`, { per_page: "25" });
-  await sleep(220);
+  }>(`/labels/${labelId}/releases`, { per_page: "40" });
+  await sleep(160);
   const out: ArtistRelease[] = [];
   for (const r of data?.releases ?? []) {
     if (!r.id) continue;
@@ -340,13 +355,13 @@ async function searchArtistReleases(
       genre: "Electronic",
     },
   );
-  await sleep(220);
+  await sleep(160);
   return data?.results ?? [];
 }
 
 export async function scoutDiscogsGraph(
   seeds: Track[],
-  limit = 28,
+  limit = 60,
 ): Promise<{ tracks: Track[]; note: string; nodes: number }> {
   const picked = seeds.slice(0, 6);
   if (!picked.length) return { tracks: [], note: "no seeds", nodes: 0 };
@@ -415,15 +430,20 @@ export async function scoutDiscogsGraph(
     }
   }
 
-  /** Espande una label: roster release + artisti (Perlon → chi ha stampato lì). */
+  const expandedLabels = new Set<string>();
+  const exploredArtists = new Set<string>();
+
+  /** Espande una label: roster + artisti (Perlon / Rawax / …). */
   async function expandLabel(
     labelName: string,
     seedIdx: number,
     pts: number,
-    hop: 1 | 2,
+    hop: number,
   ) {
+    if (expandedLabels.has(labelName.toLowerCase())) return;
     const labelId = await resolveLabelId(labelName);
     if (!labelId) return;
+    expandedLabels.add(labelName.toLowerCase());
     trustedLabels.add(labelName);
 
     const rels = await labelReleases(labelId);
@@ -452,7 +472,7 @@ export async function scoutDiscogsGraph(
         artworkUrl: r.thumb,
         seedIdx,
         pts: isSeedArtist ? pts + 20 : pts,
-        via: hop === 1 ? `label:${labelName}` : `hop2-label:${labelName}`,
+        via: `label-h${hop}:${labelName}`,
         trustedLabel: true,
       });
     }
@@ -462,11 +482,11 @@ export async function scoutDiscogsGraph(
       {
         label: labelName,
         type: "release",
-        per_page: hop === 1 ? "14" : "10",
+        per_page: "18",
         genre: "Electronic",
       },
     );
-    await sleep(220);
+    await sleep(160);
     for (const h of data?.results ?? []) {
       const { artist, title } = parseTitleArtist(h.title ?? "");
       if (!artist || looksLikeSpam(artist, title)) continue;
@@ -485,40 +505,32 @@ export async function scoutDiscogsGraph(
         year: h.year ? parseInt(h.year, 10) : undefined,
         artworkUrl: h.cover_image || h.thumb,
         seedIdx,
-        pts: pts - 5,
-        via: hop === 1 ? `label:${labelName}` : `hop2-label:${labelName}`,
+        pts: pts - 4,
+        via: `label-h${hop}:${labelName}`,
         trustedLabel: true,
       });
     }
   }
 
-  // ——— 2) Label del pick (Perlon, Playhouse…) → tutti gli artisti lì ———
-  const seedLabels = Array.from(trustedLabels).slice(0, 6);
-  for (let i = 0; i < picked.length; i++) {
-    for (const labelName of seedLabels) {
-      await expandLabel(labelName, i, 100, 1);
-    }
-  }
-
-  // ——— 3) Artisti usciti su Perlon/Playhouse → altre LORO release → nuove label (es. Rawax) ———
-  const hop2Labels = new Set<string>();
-  const topMates = Array.from(networkArtists.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([name]) => name);
-
-  for (let i = 0; i < picked.length; i++) {
-    for (const mate of topMates) {
+  /** Artisti della rete → altre release → nuove label (Rawax → altri odì…). */
+  async function expandArtists(
+    names: string[],
+    seedIdx: number,
+    pts: number,
+    discoverLabels: Set<string>,
+  ) {
+    for (const mate of names) {
+      if (exploredArtists.has(mate)) continue;
       if (Array.from(seedArtistSet).some((s) => mate.includes(s) || s.includes(mate)))
         continue;
+      exploredArtists.add(mate);
       const mateId = await resolveArtistId(mate);
       if (!mateId) continue;
       const rels = await artistReleases(mateId);
-      for (const r of rels.slice(0, 12)) {
+      for (const r of rels.slice(0, 16)) {
         if (r.label && isRealLabel(r.label)) {
-          // nuova label della rete (Rawax se un artista Perlon ha stampato lì)
-          if (!trustedLabels.has(r.label)) {
-            hop2Labels.add(r.label);
+          if (!expandedLabels.has(r.label.toLowerCase())) {
+            discoverLabels.add(r.label);
           }
         }
         bump(acc, {
@@ -529,8 +541,8 @@ export async function scoutDiscogsGraph(
           styles: [],
           year: r.year,
           artworkUrl: r.thumb,
-          seedIdx: i,
-          pts: r.label && trustedLabels.has(r.label) ? 88 : 78,
+          seedIdx,
+          pts: r.label && trustedLabels.has(r.label) ? pts + 8 : pts,
           via: `mate:${mate}`,
           trustedLabel: !!(r.label && isRealLabel(r.label)),
         });
@@ -538,14 +550,38 @@ export async function scoutDiscogsGraph(
     }
   }
 
-  // ——— 4) Hop2: chi è uscito su Rawax (e label scoperte) → consigli anche quelli ———
-  const hop2List = Array.from(hop2Labels)
-    .filter((l) => !seedLabels.includes(l))
-    .slice(0, 5);
-  for (let i = 0; i < picked.length; i++) {
-    for (const labelName of hop2List) {
-      await expandLabel(labelName, i, 82, 2);
+  // ——— Rete densa: 3 hop label ↔ artisti ———
+  // Hop1: Perlon/Playhouse… → artisti
+  // Hop2: quegli artisti → Rawax… → roster Rawax
+  // Hop3: artisti Rawax → altre label → ancora roster
+  let frontierLabels = Array.from(trustedLabels).slice(0, 8);
+  const hopPts = [105, 90, 78];
+  const labelsPerHop = [8, 8, 7];
+  const artistsPerHop = [10, 10, 8];
+
+  for (let hop = 1; hop <= 3; hop++) {
+    const pts = hopPts[hop - 1];
+    const toExpand = frontierLabels
+      .filter((l) => !expandedLabels.has(l.toLowerCase()))
+      .slice(0, labelsPerHop[hop - 1]);
+
+    for (let i = 0; i < picked.length; i++) {
+      for (const labelName of toExpand) {
+        await expandLabel(labelName, i, pts, hop);
+      }
     }
+
+    const mates = Array.from(networkArtists.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([n]) => n)
+      .filter((n) => !exploredArtists.has(n))
+      .slice(0, artistsPerHop[hop - 1]);
+
+    const nextLabels = new Set<string>();
+    for (let i = 0; i < picked.length; i++) {
+      await expandArtists(mates, i, pts - 12, nextLabels);
+    }
+    frontierLabels = Array.from(nextLabels).slice(0, labelsPerHop[hop - 1]);
   }
 
   const seedKeys = new Set(
@@ -563,7 +599,7 @@ export async function scoutDiscogsGraph(
       for (const s of Array.from(seedKeys)) {
         if (s.length > 8 && key.includes(s.slice(0, 12))) return false;
       }
-      return n.score >= 70;
+      return n.score >= 65;
     })
     .sort((a, b) => b.score - a.score)
     .slice(0, limit);
@@ -571,6 +607,6 @@ export async function scoutDiscogsGraph(
   return {
     tracks: ranked.map((n) => toTrack(n, genreFallback)),
     nodes: ranked.length,
-    note: `Rete · ${ranked.length} dig · label seed ${seedLabels.length} · hop2 ${hop2List.length} · artisti ${topMates.length}`,
+    note: `Rete densa · ${ranked.length} dig · ${expandedLabels.size} label · ${exploredArtists.size} artisti · 3 hop`,
   };
 }

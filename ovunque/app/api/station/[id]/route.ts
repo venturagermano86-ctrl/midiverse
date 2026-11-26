@@ -7,7 +7,7 @@ import { sanitizeTrack } from "@/lib/sanitizeTrack";
 import type { Track } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
-export const maxDuration = 60;
+export const maxDuration = 90;
 
 type Ctx = { params: { id: string } };
 
