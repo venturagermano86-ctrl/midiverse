@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { CoverArt } from "@/components/CoverArt";
 import { HeartWish } from "@/components/HeartWish";
 import { QuickPlay } from "@/components/QuickPlay";
@@ -11,7 +12,7 @@ const MAX_PICKS = 6;
 
 type Props = {
   tracks: Track[];
-  /** Se true, apre short/long in nuova scheda browser. */
+  /** @deprecated sempre stessa scheda (SPA) */
   openInNewTab?: boolean;
 };
 
@@ -31,7 +32,8 @@ function Centrino({ track }: { track: Track }) {
   );
 }
 
-export function PickShelf({ tracks, openInNewTab = true }: Props) {
+export function PickShelf({ tracks }: Props) {
+  const router = useRouter();
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState<"short" | "long" | null>(null);
   const [q, setQ] = useState("");
@@ -71,12 +73,8 @@ export function PickShelf({ tracks, openInNewTab = true }: Props) {
       const bag = stashDigPicks(mode, pickedTracks);
       const seedsParam = encodeSeedsParam(mode, pickedTracks);
       const url = `/diglist?mode=${mode}&bag=${encodeURIComponent(bag)}&seeds=${encodeURIComponent(seedsParam)}`;
-      if (openInNewTab) {
-        // senza noopener: stessa origine + storage; seeds restano comunque in URL
-        window.open(url, "_blank");
-      } else {
-        window.location.href = url;
-      }
+      // Sempre stessa scheda — Charts ↔ Tracks ↔ Diglist senza pagine doppie
+      router.push(url);
     } finally {
       setBusy(null);
     }

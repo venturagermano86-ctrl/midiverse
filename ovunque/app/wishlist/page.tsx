@@ -41,7 +41,7 @@ export default function WishlistPage() {
           </Link>
         </div>
       ) : (
-        <PickShelf tracks={tracks} openInNewTab />
+        <PickShelf tracks={tracks} />
       )}
     </main>
   );
