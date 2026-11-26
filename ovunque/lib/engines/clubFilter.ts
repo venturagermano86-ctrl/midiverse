@@ -47,29 +47,37 @@ export function isClubDig(track: Track, seedHints: string[] = []): boolean {
     }
   }
 
-  // Famiglia house/techno/electronic ok
+  // Famiglia house/techno ok
   const fam = resolved.familySlug;
   if (fam === "house" || fam === "techno") return true;
   if (CLUB_STYLES.test(genre) || CLUB_GENRE_BLOB.test(genre)) return true;
 
-  // Electronic generico: ok solo se label/title suggeriscono club
-  if (/electronic|dance/i.test(genre)) {
-    if (
-      /perlon|cadenza|ostgut|minus|cocoon|m-plant|fxhe|sushitech|alphahouse|sei es drum|playhouse|wagon repair/i.test(
-        track.label,
-      )
-    ) {
-      return true;
-    }
-    // stesso artista di un seed club
+  // Label da rete digger (Perlon, Dekmantel, Rawax…)
+  if (
+    /perlon|cadenza|ostgut|minus|cocoon|m-plant|fxhe|sushitech|alphahouse|sei es drum|playhouse|wagon repair|rawax|dekmantel|raum|frisbee|kompakt|plus.?8|purpose maker|mote[- ]evo|dialect|dial |holding|workshop|fabric/i.test(
+      track.label,
+    )
+  ) {
+    return true;
+  }
+
+  // Electronic / Dance generico: ok se artista seed o label non-vuota reale
+  if (/electronic|^dance$/i.test(genre) || resolved.slug === "dance-electro-pop") {
     if (
       seedHints.some((h) => {
         const a = track.artist.toLowerCase();
-        return a.includes(h.toLowerCase()) || h.toLowerCase().includes(a.split(/\s+/)[0] || "");
+        const h0 = h.toLowerCase();
+        return (
+          a.includes(h0) ||
+          h0.includes(a.split(/\s+/)[0] || "") ||
+          h0.split(/\s+/).some((p) => p.length > 3 && a.includes(p))
+        );
       })
     ) {
       return true;
     }
+    // label reale (non —) da Discogs rete
+    if (track.label && track.label !== "—" && track.label.length >= 3) return true;
     return false;
   }
 
