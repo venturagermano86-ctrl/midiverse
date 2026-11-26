@@ -1,23 +1,18 @@
 /**
- * Diglist a croce — Short / Long / Station
+ * Diglist a croce — metodo stretto (no pool digger / no dump corde)
  *
- * Passi Diglist:
- * 1–2 profilo BC (già tuoi + following) se username + API ok
- * 3 seed (≤6)
- * 4–8 buyers × collezioni + score
- * 9 catalogo label/artista REALE (Discogs) — non dump genere
- * 10 audio off (nota)
- * 11 diversità; generi solo filtri
+ * Dai pick:
+ * 1) Discogs discografia stesso artista
+ * 2) Discogs roster delle LABEL reali trovate su quei release (Perlon, Cadenza…)
+ * 3) iTunes stesso artista
+ * 4) co-wishlist community se c’è croce
  *
- * Se Bandcamp è Cloudflare: croce su wishlist community + grafo Discogs
- * (stesso artista / stessa label reale dei pick). Niente collector finti a caso.
+ * Niente lista classici house a caso. Niente cover Topolino (enrich stretto).
  */
 
 import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
 import type { Track } from "../types";
-import { rankByAffinity } from "./affinity";
-import { digsUserWouldBuy } from "./diggerPool";
 import {
   loadBandcampProfile,
   loadFanLibrary,
@@ -111,36 +106,12 @@ function isCorrelated(seeds: Track[], candidate: Track, reason: string): boolean
   // 3) co-wishlist / buyer croce forte
   if (/croce×|co-wishlist|buyer croce/i.test(reason)) return true;
 
-  // 4) pool digger / cluster: stesse corde (musica che comprerebbe)
-  if (/corde digger|comprerebbe|cluster|digger lane/i.test(reason)) {
-    const seedGenres = seeds.map((s) => s.genre.toLowerCase());
-    const cg = candidate.genre.toLowerCase();
-    if (seedGenres.includes(cg)) return true;
-    const seedHouse = seeds.some((s) => resolveGenre(s.genre).familySlug === "house");
-    if (
-      seedHouse &&
-      /^(house|deep house|tech house|acid)$/i.test(candidate.genre)
-    ) {
-      return true;
-    }
-    const seedTechno = seeds.some(
-      (s) =>
-        resolveGenre(s.genre).familySlug === "techno" ||
-        /minimal|techno/i.test(s.genre),
-    );
-    if (
-      seedTechno &&
-      /^(techno|minimal|hard techno|melodic techno|acid)$/i.test(candidate.genre)
-    ) {
-      return true;
-    }
-    // reason già dice corde digger → ok (lane match fatto a monte)
-    if (/corde digger|comprerebbe/i.test(reason)) return true;
-    return false;
-  }
-
-  // 5) Discogs/iTunes già filtrati a artist/label — ok se reason lo dice
-  if (/Discogs stesso|iTunes discografia|stesso artista|stessa label/i.test(reason)) {
+  // 4) Discogs/iTunes artist-label graph only
+  if (
+    /Discogs|iTunes discografia|stesso artista|stessa label|label mate|artist mate/i.test(
+      reason,
+    )
+  ) {
     return true;
   }
 
@@ -340,25 +311,19 @@ export async function runDiglistSocial(
     void loadFanLibrary;
   }
 
-  // ——— Discogs: solo artist/label reali ———
+  // ——— Discogs: artist discog + label mates (scout già filtra style) ———
   try {
-    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 28 : 16);
+    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 36 : 24);
     dg.tracks.forEach((t, i) => {
-      const sameArtist = seeds.some(
-        (s) => s.artist.toLowerCase() === t.artist.toLowerCase(),
-      );
-      const sameLabel = seeds.some(
-        (s) =>
-          s.label &&
-          s.label !== "—" &&
-          s.label.toLowerCase() === t.label.toLowerCase(),
-      );
-      // scarta Discogs “roster” debole senza artist/label match ai pick
-      if (!sameArtist && !sameLabel) return;
+      const sameArtist = seeds.some((s) => {
+        const sa = s.artist.toLowerCase();
+        const ca = t.artist.toLowerCase();
+        return ca === sa || ca.includes(sa) || sa.includes(ca);
+      });
       bump(
         t,
-        (sameArtist ? 120 : 95) - i,
-        sameArtist ? "Discogs stesso artista" : "Discogs stessa label",
+        (sameArtist ? 140 : 105) - i,
+        sameArtist ? "Discogs artist mate" : `Discogs label mate ${t.label}`,
         2,
         2,
       );
@@ -375,63 +340,51 @@ export async function runDiglistSocial(
     /* ignore */
   }
 
-  // Catalogo: stesso artista / stessa label
+  // Catalogo: SOLO stesso artista o stessa label (mai dump genere)
   const seedArtists = new Set(seeds.map((s) => s.artist.toLowerCase()));
   const seedLabels = new Set(
     seeds
       .map((s) => s.label)
-      .filter((l) => l && l !== "—" && l.length >= 3 && l.toLowerCase() !== "x"),
+      .filter((l) => l && l !== "—" && l.length >= 3 && l.toLowerCase() !== "x")
+      .map((l) => l.toLowerCase()),
   );
   for (const t of TRACKS) {
     if (seedArtists.has(t.artist.toLowerCase())) {
       bump(t, 130, "stesso artista catalogo", 2, 2);
-    } else if (seedLabels.has(t.label)) {
+    } else if (seedLabels.has(t.label.toLowerCase())) {
       bump(t, 100, `stessa label ${t.label}`, 2, 1);
     }
   }
 
-  // Affinity cluster — solo croce ≥2 (altrimenti troppo “topolino”)
-  const affinity = rankByAffinity(seeds, [], mode === "long" ? 24 : 14);
-  affinity.forEach((h) => {
-    if (h.croce < 2) return;
-    bump(
-      h.track,
-      90 + h.croce * 40 + h.score / 5,
-      `cluster croce×${h.croce}`,
-      h.croce,
-      h.croce,
-    );
-  });
-
-  // ——— Pool digger: dischi che COMPREREBBE (stesse corde dei pick) ———
-  const wouldBuy = digsUserWouldBuy(seeds, mode === "long" ? 36 : 24);
-  wouldBuy.forEach((h) => {
-    bump(h.track, h.score, h.reason, 2, 2);
-  });
-
   let ranked = Array.from(hits.values())
-    .filter((h) => h.score >= 65)
+    .filter((h) => h.score >= 70)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
+    .filter((h) => !/mickey|topolino|disney/i.test(`${h.track.title} ${h.track.artist}`))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
   ranked = diversify(ranked, cfg.out);
 
-  // Generi solo per filtri (passo 11)
   ranked.forEach((h) => {
     h.genre = resolveGenre(h.track.genre).name;
+    if (
+      h.track.artworkUrl &&
+      /mickey|topolino|disney|clubhouse/i.test(h.track.artworkUrl)
+    ) {
+      h.track = { ...h.track, artworkUrl: undefined };
+    }
   });
 
   const audioActive = options.audioCompare === true;
   const src = bandcampLive
     ? "Bandcamp live"
-    : "corde digger + Discogs artist/label (BC Cloudflare)";
+    : "Discogs artist + label mates (no dump)";
 
   return {
     tracks: ranked,
     bandcampLive,
     audioActive,
-    method: "diglist-would-buy",
-    note: `${mode} · ${ranked.length} dig che compreresti · ${src} · genere solo filtri${audioActive ? "" : " · audio off"}`,
+    method: "diglist-artist-label-croce",
+    note: `${mode} · ${ranked.length} dig · ${src} · solo artista/label${audioActive ? "" : " · audio off"}`,
     stats: {
       owned: ownedKeys.size,
       buyersUsed: Math.min(buyersUsed, cfg.buyers) || buyersUsed,
