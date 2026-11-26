@@ -131,7 +131,7 @@ export function fallbackLabelNetwork(seeds: Track[], limit = 36): Track[] {
   const score = (r: NetRelease) => {
     const lk = r.label.toLowerCase();
     let pts = 0;
-    for (const b of want) {
+    for (const b of Array.from(want)) {
       if (lk.includes(b)) pts += 10;
     }
     for (const s of seeds) {
