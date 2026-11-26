@@ -69,6 +69,7 @@ export function RecordShelf({ tracks, showPrice = true }: Props) {
                   src={track.previewUrl}
                   title={track.title}
                   artist={track.artist}
+                  trackId={track.id}
                 />
               </div>
             </div>
