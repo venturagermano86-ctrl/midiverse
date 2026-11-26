@@ -125,25 +125,63 @@ function isCorrelated(seeds: Track[], candidate: Track, reason: string): boolean
   return false;
 }
 
-function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
+function isSeedArtistName(artist: string, seedArtists: Set<string>): boolean {
+  const a = artist.toLowerCase();
+  for (const s of Array.from(seedArtists)) {
+    if (!s || s.length < 2) continue;
+    if (a === s || a.includes(s) || s.includes(a)) return true;
+    const head = s.split(/\s+/)[0] || s;
+    if (head.length > 3 && a.includes(head)) return true;
+  }
+  return false;
+}
+
+/**
+ * Pick Villalobos → qualche Villalobos in cima, poi altri artisti (Perlon roster…).
+ * Max 3 del seed artist, max 2 per tutti gli altri.
+ */
+function diversify(
+  hits: DigSocialHit[],
+  limit: number,
+  seedArtists: Set<string> = new Set(),
+): DigSocialHit[] {
   const perArtist = new Map<string, number>();
   const perLabel = new Map<string, number>();
   const seen = new Set<string>();
   const out: DigSocialHit[] = [];
-  for (const h of hits) {
+
+  const tryPush = (h: DigSocialHit, maxForArtist: number) => {
+    if (out.length >= limit) return false;
     const key = itemKey(h.track.artist, h.track.title);
-    if (seen.has(key)) continue;
+    if (seen.has(key)) return false;
     const a = h.track.artist.toLowerCase();
     const l = (h.track.label || "").toLowerCase();
-    // Poco dello stesso artista — preferisci label mates diversi
-    if ((perArtist.get(a) ?? 0) >= 2) continue;
-    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 6) continue;
+    if ((perArtist.get(a) ?? 0) >= maxForArtist) return false;
+    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 6) return false;
     out.push(h);
     seen.add(key);
     perArtist.set(a, (perArtist.get(a) ?? 0) + 1);
     if (l) perLabel.set(l, (perLabel.get(l) ?? 0) + 1);
+    return true;
+  };
+
+  // 1) Prima: fino a 3 pezzi del pick artist (Villalobos…)
+  for (const h of hits) {
+    if (!isSeedArtistName(h.track.artist, seedArtists)) continue;
+    tryPush(h, 3);
+    if (out.length >= Math.min(3, limit)) break;
+  }
+
+  // 2) Poi: altri artisti della rete (max 2 ciascuno)
+  for (const h of hits) {
+    if (isSeedArtistName(h.track.artist, seedArtists)) {
+      tryPush(h, 3); // eventuale 2°/3° se manca
+    } else {
+      tryPush(h, 2);
+    }
     if (out.length >= limit) break;
   }
+
   return out;
 }
 
@@ -446,7 +484,17 @@ export async function runDiglistSocial(
     .filter((h) => !/mickey|topolino|disney/i.test(`${h.track.title} ${h.track.artist}`))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
-  ranked = diversify(ranked, cfg.out);
+  const seedArtistSet = new Set(
+    seeds.flatMap((s) =>
+      s.artist
+        .toLowerCase()
+        .split(/\s*(?:&|,|feat\.?|ft\.?|x)\s*/)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 1),
+    ),
+  );
+
+  ranked = diversify(ranked, cfg.out, seedArtistSet);
 
   // Mai 1 dig: se la rete è magra, riempi All Inn↔Perlon (anche se Discogs ha dato poco)
   if (ranked.length < minDigs) {
@@ -469,7 +517,7 @@ export async function runDiglistSocial(
     if (!networkNote.includes("curata") && fb.length) {
       networkNote = `${networkNote || "rete label"} · +curata ${fb.length}`;
     }
-    ranked = diversify(ranked, cfg.out);
+    ranked = diversify(ranked, cfg.out, seedArtistSet);
   }
 
   ranked.forEach((h) => {
