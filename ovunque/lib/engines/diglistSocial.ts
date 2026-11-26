@@ -395,12 +395,14 @@ export async function runDiglistSocial(
     }
   }
 
-  // iTunes: SOLO stesso artista
-  try {
-    const it = await scoutItunesArtists(seeds, mode === "long" ? 14 : 10);
-    it.tracks.forEach((t) => bump(t, 110, "iTunes discografia artista", 1, 1));
-  } catch {
-    /* ignore */
+  // iTunes: solo Long (Short deve chiudere veloce)
+  if (mode === "long") {
+    try {
+      const it = await scoutItunesArtists(seeds, 12);
+      it.tracks.forEach((t) => bump(t, 110, "iTunes discografia artista", 1, 1));
+    } catch {
+      /* ignore */
+    }
   }
 
   // Catalogo: SOLO stesso artista o stessa label (mai dump genere)

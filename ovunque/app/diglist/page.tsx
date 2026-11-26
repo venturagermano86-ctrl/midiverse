@@ -42,25 +42,35 @@ function DigListResults() {
           return;
         }
         setSeedCount(seeds.length);
-        const res = await fetch("/api/diglist", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            seeds,
-            owned: owned.slice(0, 80),
-            mode,
-            bandcampUser: getBandcampUsername() || undefined,
-          }),
-        });
+        const ctrl = new AbortController();
+        const kill = setTimeout(() => ctrl.abort(), mode === "long" ? 80000 : 45000);
+        let res: Response;
+        try {
+          res = await fetch("/api/diglist", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            signal: ctrl.signal,
+            body: JSON.stringify({
+              seeds,
+              owned: owned.slice(0, 40),
+              mode,
+              bandcampUser: getBandcampUsername() || undefined,
+            }),
+          });
+        } finally {
+          clearTimeout(kill);
+        }
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
           const err =
             data.error === "sign_in_required"
               ? "Apri l’app da Cursor (Private) o metti Team/Public"
-              : data.error === "diglist_failed"
-                ? "Rete Diglist in timeout — riprova Short"
-                : data.error || `Errore ${res.status}`;
+              : res.status === 502 || res.status === 504
+                ? "Server in aggiornamento — riprova tra 30s"
+                : data.error === "diglist_failed"
+                  ? "Rete Diglist lenta — riprova Short"
+                  : data.error || `Errore ${res.status}`;
           setError(err);
           setLoading(false);
           return;
@@ -72,9 +82,15 @@ function DigListResults() {
             "Incroci label: pick → label → artisti → altre label.",
         );
         setLoading(false);
-      } catch {
+      } catch (e) {
         if (!cancelled) {
-          setError("Rete lenta o sessione scaduta — riprova da Open App");
+          const aborted =
+            e instanceof DOMException && e.name === "AbortError";
+          setError(
+            aborted
+              ? "Short troppo lento — riprova (rete label)"
+              : "Server in aggiornamento o sessione — riprova da Open App",
+          );
           setLoading(false);
         }
       }

@@ -68,10 +68,10 @@ export async function POST(req: Request) {
       audioCompare: body.audioCompare === true,
     });
 
-    // Preview su più dig (Deezer+iTunes) — player sulle copertine
-    const enrichN = mode === "long" ? 24 : 16;
+    // Enrich minimo server-side — QuickPlay risolve ▶ al click (niente Offline)
+    const enrichN = mode === "long" ? 8 : 3;
     const toEnrich = result.tracks.slice(0, enrichN).map((h) => h.track);
-    const enriched = await enrichPreviews(toEnrich, 4);
+    const enriched = await enrichPreviews(toEnrich, 3);
     const enrichedById = new Map(enriched.map((t) => [t.id, t]));
     const tracks = result.tracks.map((h) => enrichedById.get(h.track.id) ?? h.track);
 
