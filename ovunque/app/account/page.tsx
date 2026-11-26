@@ -59,7 +59,7 @@ export default function AccountPage() {
           </p>
           <p className="mt-2 text-sm text-soft">
             Profilo <strong className="text-mist">pubblico</strong> con dischi comprati:
-            collezione + wishlist diventano «già tuoi», poi si incrociano i compratori
+            wishlist cloud è visibile su Liste digger, poi si incrociano i pezzi in comune
             (come Diglist). Se Bandcamp è bloccato da CF, usiamo lo stesso schema sulla
             community.
           </p>
