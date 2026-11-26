@@ -415,102 +415,112 @@ export async function scoutDiscogsGraph(
     }
   }
 
-  // ——— 2) Stesse label → altri artisti / release ———
-  const labelList = Array.from(trustedLabels).slice(0, 8);
-  for (let i = 0; i < picked.length; i++) {
-    for (const labelName of labelList) {
-      const labelId = await resolveLabelId(labelName);
-      if (!labelId) continue;
-      const rels = await labelReleases(labelId);
-      for (const r of rels) {
-        const a = (r.artist || "").trim();
-        if (!a) continue;
-        const isSeedArtist = Array.from(seedArtistSet).some(
-          (s) =>
-            a.toLowerCase() === s ||
-            a.toLowerCase().includes(s) ||
-            s.includes(a.toLowerCase().split(/\s+/)[0] || ""),
-        );
-        if (!isSeedArtist) {
-          networkArtists.set(
-            a.toLowerCase(),
-            (networkArtists.get(a.toLowerCase()) ?? 0) + 1,
-          );
-        }
-        bump(acc, {
-          id: r.id,
-          artist: a,
-          title: r.title,
-          labels: [labelName],
-          styles: [],
-          year: r.year,
-          artworkUrl: r.thumb,
-          seedIdx: i,
-          pts: isSeedArtist ? 120 : 95,
-          via: isSeedArtist
-            ? `artist:${a}`
-            : `label:${labelName}`,
-          trustedLabel: true,
-        });
-      }
+  /** Espande una label: roster release + artisti (Perlon → chi ha stampato lì). */
+  async function expandLabel(
+    labelName: string,
+    seedIdx: number,
+    pts: number,
+    hop: 1 | 2,
+  ) {
+    const labelId = await resolveLabelId(labelName);
+    if (!labelId) return;
+    trustedLabels.add(labelName);
 
-      // Search label + Electronic con style
-      const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
-        "/database/search",
-        {
-          label: labelName,
-          type: "release",
-          per_page: "12",
-          genre: "Electronic",
-        },
+    const rels = await labelReleases(labelId);
+    for (const r of rels) {
+      const a = (r.artist || "").trim();
+      if (!a || looksLikeSpam(a, r.title)) continue;
+      const isSeedArtist = Array.from(seedArtistSet).some(
+        (s) =>
+          a.toLowerCase() === s ||
+          a.toLowerCase().includes(s) ||
+          s.includes(a.toLowerCase().split(/\s+/)[0] || ""),
       );
-      await sleep(220);
-      for (const h of data?.results ?? []) {
-        const { artist, title } = parseTitleArtist(h.title ?? "");
-        if (!seedArtistSet.has(artist.toLowerCase())) {
-          networkArtists.set(
-            artist.toLowerCase(),
-            (networkArtists.get(artist.toLowerCase()) ?? 0) + 1,
-          );
-        }
-        bump(acc, {
-          id: h.id,
-          artist,
-          title,
-          labels: h.label ?? [labelName],
-          styles: h.style,
-          year: h.year ? parseInt(h.year, 10) : undefined,
-          artworkUrl: h.cover_image || h.thumb,
-          seedIdx: i,
-          pts: 90,
-          via: `label:${labelName}`,
-          trustedLabel: true,
-        });
+      if (!isSeedArtist) {
+        networkArtists.set(
+          a.toLowerCase(),
+          (networkArtists.get(a.toLowerCase()) ?? 0) + 1,
+        );
       }
+      bump(acc, {
+        id: r.id,
+        artist: a,
+        title: r.title,
+        labels: [labelName],
+        styles: [],
+        year: r.year,
+        artworkUrl: r.thumb,
+        seedIdx,
+        pts: isSeedArtist ? pts + 20 : pts,
+        via: hop === 1 ? `label:${labelName}` : `hop2-label:${labelName}`,
+        trustedLabel: true,
+      });
+    }
+
+    const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
+      "/database/search",
+      {
+        label: labelName,
+        type: "release",
+        per_page: hop === 1 ? "14" : "10",
+        genre: "Electronic",
+      },
+    );
+    await sleep(220);
+    for (const h of data?.results ?? []) {
+      const { artist, title } = parseTitleArtist(h.title ?? "");
+      if (!artist || looksLikeSpam(artist, title)) continue;
+      if (!seedArtistSet.has(artist.toLowerCase())) {
+        networkArtists.set(
+          artist.toLowerCase(),
+          (networkArtists.get(artist.toLowerCase()) ?? 0) + 1,
+        );
+      }
+      bump(acc, {
+        id: h.id,
+        artist,
+        title,
+        labels: h.label ?? [labelName],
+        styles: h.style,
+        year: h.year ? parseInt(h.year, 10) : undefined,
+        artworkUrl: h.cover_image || h.thumb,
+        seedIdx,
+        pts: pts - 5,
+        via: hop === 1 ? `label:${labelName}` : `hop2-label:${labelName}`,
+        trustedLabel: true,
+      });
     }
   }
 
-  // ——— 3) Hop: top artisti usciti sulle label → loro altre release ———
+  // ——— 2) Label del pick (Perlon, Playhouse…) → tutti gli artisti lì ———
+  const seedLabels = Array.from(trustedLabels).slice(0, 6);
+  for (let i = 0; i < picked.length; i++) {
+    for (const labelName of seedLabels) {
+      await expandLabel(labelName, i, 100, 1);
+    }
+  }
+
+  // ——— 3) Artisti usciti su Perlon/Playhouse → altre LORO release → nuove label (es. Rawax) ———
+  const hop2Labels = new Set<string>();
   const topMates = Array.from(networkArtists.entries())
     .sort((a, b) => b[1] - a[1])
-    .slice(0, 6)
+    .slice(0, 8)
     .map(([name]) => name);
 
   for (let i = 0; i < picked.length; i++) {
     for (const mate of topMates) {
-      // salta se è già il seed
       if (Array.from(seedArtistSet).some((s) => mate.includes(s) || s.includes(mate)))
         continue;
       const mateId = await resolveArtistId(mate);
       if (!mateId) continue;
       const rels = await artistReleases(mateId);
-      for (const r of rels.slice(0, 8)) {
-        // solo se stampa ancora su label trusted O nuova label da aggiungere soft
-        const onTrusted =
-          r.label && trustedLabels.has(r.label)
-            ? true
-            : r.label && isRealLabel(r.label);
-        if (!onTrusted && r.label && !isRealLabel(r.label)) continue;
+      for (const r of rels.slice(0, 12)) {
+        if (r.label && isRealLabel(r.label)) {
+          // nuova label della rete (Rawax se un artista Perlon ha stampato lì)
+          if (!trustedLabels.has(r.label)) {
+            hop2Labels.add(r.label);
+          }
+        }
         bump(acc, {
           id: r.id,
           artist: r.artist || mate,
@@ -520,18 +530,27 @@ export async function scoutDiscogsGraph(
           year: r.year,
           artworkUrl: r.thumb,
           seedIdx: i,
-          pts: r.label && trustedLabels.has(r.label) ? 85 : 70,
-          via: `network:${mate}`,
-          trustedLabel: !!(r.label && trustedLabels.has(r.label)),
+          pts: r.label && trustedLabels.has(r.label) ? 88 : 78,
+          via: `mate:${mate}`,
+          trustedLabel: !!(r.label && isRealLabel(r.label)),
         });
       }
+    }
+  }
+
+  // ——— 4) Hop2: chi è uscito su Rawax (e label scoperte) → consigli anche quelli ———
+  const hop2List = Array.from(hop2Labels)
+    .filter((l) => !seedLabels.includes(l))
+    .slice(0, 5);
+  for (let i = 0; i < picked.length; i++) {
+    for (const labelName of hop2List) {
+      await expandLabel(labelName, i, 82, 2);
     }
   }
 
   const seedKeys = new Set(
     picked.map((s) => `${s.artist} ${s.title}`.toLowerCase()),
   );
-  // iTunes «Electronic» → Dance/Electro Pop in taxonomy: non usarlo come fallback
   const rawG = picked[0]?.genre || "";
   const genreFallback = /electronic|dance\s*\/\s*electro|pop/i.test(rawG)
     ? "Minimal"
@@ -552,6 +571,6 @@ export async function scoutDiscogsGraph(
   return {
     tracks: ranked.map((n) => toTrack(n, genreFallback)),
     nodes: ranked.length,
-    note: `Rete Discogs · ${ranked.length} dig · ${trustedLabels.size} label · ${topMates.length} artisti collegati`,
+    note: `Rete · ${ranked.length} dig · label seed ${seedLabels.length} · hop2 ${hop2List.length} · artisti ${topMates.length}`,
   };
 }
