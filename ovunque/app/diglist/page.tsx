@@ -16,15 +16,18 @@ function DigListResults() {
   const seedsParam = params.get("seeds");
   const { tracks: owned } = useWishlist();
   const [tracks, setTracks] = useState<Track[]>([]);
-  const [note, setNote] = useState("Diglist croce in corso…");
+  const [note, setNote] = useState("Incroci label in corso…");
   const [seedCount, setSeedCount] = useState(0);
   const [error, setError] = useState("");
   const [mode, setMode] = useState<"short" | "long">(modeParam);
   const [genres, setGenres] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      setLoading(true);
+      setError("");
       try {
         const packed = loadDigPicks(bag, seedsParam);
         const seeds = packed?.seeds ?? [];
@@ -35,6 +38,7 @@ function DigListResults() {
           setError(
             "Nessun pick — torna alla wishlist, tocca fino a 6 dischi, poi Short/Long.",
           );
+          setLoading(false);
           return;
         }
         setSeedCount(seeds.length);
@@ -58,6 +62,7 @@ function DigListResults() {
                 ? "Rete Diglist in timeout — riprova Short"
                 : data.error || `Errore ${res.status}`;
           setError(err);
+          setLoading(false);
           return;
         }
         setTracks(data.tracks ?? []);
@@ -66,9 +71,12 @@ function DigListResults() {
           data.note ||
             "Incroci label: pick → label → artisti → altre label.",
         );
+        setLoading(false);
       } catch {
-        if (!cancelled)
+        if (!cancelled) {
           setError("Rete lenta o sessione scaduta — riprova da Open App");
+          setLoading(false);
+        }
       }
     })();
     return () => {
@@ -110,8 +118,14 @@ function DigListResults() {
         </Link>
       </div>
 
-      {error ? null : tracks.length === 0 ? (
-        <p className="mt-12 text-muted">Incrocio compratori × collezioni…</p>
+      {error ? null : loading ? (
+        <p className="mt-12 text-muted">
+          Incroci label: pick → All Inn / Perlon → roster…
+        </p>
+      ) : tracks.length === 0 ? (
+        <p className="mt-12 text-muted">
+          Nessun dig da questo pick — riprova Short o cambia disco.
+        </p>
       ) : (
         <div className="mt-8">
           <RecordShelf tracks={tracks} />

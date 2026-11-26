@@ -22,6 +22,7 @@ import {
 } from "../live/bandcampDiglist";
 import { scoutDiscogsGraph } from "../live/discogsScout";
 import { scoutItunesArtists } from "../live/itunesArtistScout";
+import { fallbackLabelNetwork } from "../live/labelNetworkFallback";
 import { buyerCollectionsForSeeds, coWishlistedWithSeeds } from "../wishlist";
 
 export type DigSocialMode = "short" | "long" | "station";
@@ -177,7 +178,9 @@ function bumpHit(
   if (seeds.length && isSeedOrOwned(track, seeds, ownedKeys)) return;
   if (seeds.length && !isCorrelated(seeds, track, reason)) return;
   const seedHints = seeds.map((s) => s.artist);
-  if (!isClubDig(track, seedHints)) return;
+  // Rete label (Discogs o curata) già filtrata — non rifilare a 0 dig
+  const fromNetwork = /rete:|rete curata|label mate|network/i.test(reason);
+  if (!fromNetwork && !isClubDig(track, seedHints)) return;
   const key = itemKey(track.artist, track.title);
   const prev = map.get(key);
   if (!prev) {
@@ -317,6 +320,7 @@ export async function runDiglistSocial(
 
   // ——— Discogs RETE: artista → label → roster → altre label (All Inn→Perlon…) ———
   let networkNote = "";
+  let discogsNodes = 0;
   try {
     const dg = await scoutDiscogsGraph(
       seeds,
@@ -324,6 +328,7 @@ export async function runDiglistSocial(
       mode,
     );
     networkNote = dg.note;
+    discogsNodes = dg.nodes;
     dg.tracks.forEach((t, i) => {
       const sameArtist = seeds.some((s) => {
         const names = s.artist
@@ -345,7 +350,21 @@ export async function runDiglistSocial(
       );
     });
   } catch {
-    /* ignore */
+    networkNote = "Discogs timeout";
+  }
+
+  // Se Discogs è vuoto/429 → stessa croce da rete curata (mai 0 dig su All Inn/Perlon)
+  if (discogsNodes === 0 || hits.size < 8) {
+    const fb = fallbackLabelNetwork(
+      seeds,
+      mode === "long" ? 40 : mode === "station" ? 18 : 28,
+    );
+    fb.forEach((t, i) => {
+      bump(t, 95 - i, `rete curata: ${t.label}`, 2, 2);
+    });
+    if (fb.length && discogsNodes === 0) {
+      networkNote = `rete curata All Inn↔Perlon · ${fb.length} dig (Discogs vuoto)`;
+    }
   }
 
   // iTunes: SOLO stesso artista
@@ -376,7 +395,12 @@ export async function runDiglistSocial(
   let ranked = Array.from(hits.values())
     .filter((h) => h.score >= 70)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
-    .filter((h) => isClubDig(h.track, seedHints))
+    .filter((h) => {
+      const fromNetwork = /rete:|rete curata|label mate|network/i.test(
+        h.reasons.join(" "),
+      );
+      return fromNetwork || isClubDig(h.track, seedHints);
+    })
     .filter((h) => !/mickey|topolino|disney/i.test(`${h.track.title} ${h.track.artist}`))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
