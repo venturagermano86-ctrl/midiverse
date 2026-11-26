@@ -2,7 +2,8 @@
 
 import { useCallback, useRef, useState } from "react";
 import { ChartTable } from "@/components/ChartTable";
-import { parseScreenshotQueries } from "@/lib/screenshotParse";
+import { pickExactTrack } from "@/lib/screenshotExact";
+import { parseScreenshotLines } from "@/lib/screenshotParse";
 import type { Track } from "@/lib/types";
 
 type Props = {
@@ -10,7 +11,7 @@ type Props = {
 };
 
 /**
- * Carica uno screenshot delle tracce preferite → OCR → cerca musica simile.
+ * Screenshot → OCR → match ESATTO di quelle tracce (non simili).
  * L'immagine resta sul device (OCR in browser).
  */
 export function ScreenshotDig({ className = "" }: Props) {
@@ -56,8 +57,8 @@ export function ScreenshotDig({ className = "" }: Props) {
         },
       });
       const text = result.data.text || "";
-      const found = parseScreenshotQueries(text, 8);
-      setQueries(found);
+      const found = parseScreenshotLines(text, 8);
+      setQueries(found.map((l) => l.query));
 
       if (found.length === 0) {
         setStatus(
@@ -67,32 +68,39 @@ export function ScreenshotDig({ className = "" }: Props) {
         return;
       }
 
-      setStatus(`Trovate ${found.length} tracce — cerco simili…`);
+      setStatus(`Trovate ${found.length} righe — match esatto…`);
       const hits: Track[] = [];
       const seen = new Set<string>();
+      let missed = 0;
 
-      for (const q of found) {
+      for (const line of found) {
         try {
           const res = await fetch(
-            `/api/live/search?q=${encodeURIComponent(q)}&limit=4`,
+            `/api/live/search?q=${encodeURIComponent(line.query)}&limit=16`,
           );
           const data = await res.json();
-          if (!res.ok || !Array.isArray(data.tracks)) continue;
-          for (const t of data.tracks as Track[]) {
-            if (seen.has(t.id)) continue;
-            seen.add(t.id);
-            hits.push(t);
+          if (!res.ok || !Array.isArray(data.tracks)) {
+            missed++;
+            continue;
           }
+          const pick = pickExactTrack(line, data.tracks as Track[]);
+          if (!pick) {
+            missed++;
+            continue;
+          }
+          if (seen.has(pick.track.id)) continue;
+          seen.add(pick.track.id);
+          hits.push(pick.track);
         } catch {
-          /* next query */
+          missed++;
         }
       }
 
-      setTracks(hits.slice(0, 28));
+      setTracks(hits);
       setStatus(
         hits.length > 0
-          ? `Da screenshot → ${hits.length} dig simili. Ascolta, salva, Short/Long list.`
-          : "OCR ok ma nessun hit live — riprova o cerca a mano.",
+          ? `Screenshot → ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non trovate` : ""}. Ascolta, salva, Short/Long.`
+          : "OCR ok ma nessuna traccia esatta in catalogo — ritaglia meglio o cerca a mano.",
       );
     } catch {
       setStatus("OCR fallito — riprova con un altro screenshot.");
@@ -112,8 +120,9 @@ export function ScreenshotDig({ className = "" }: Props) {
         Carica uno screenshot
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-soft">
-        Delle tue tracce preferite (chart, wishlist, Beatport, telefono). Leggiamo i titoli
-        e partiamo con la ricerca di musica simile — l’immagine non lascia il tuo device.
+        Delle tue tracce (chart, wishlist, Beatport, telefono). Leggiamo i titoli e
+        troviamo <strong className="font-semibold text-mist">quelle tracce</strong>, non
+        simili — l’immagine non lascia il tuo device.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -170,7 +179,7 @@ export function ScreenshotDig({ className = "" }: Props) {
       {tracks.length > 0 ? (
         <div className="mt-6">
           <h3 className="mb-3 font-display text-lg font-black text-mist">
-            Musica simile dallo screenshot
+            Tracce esatte dallo screenshot
           </h3>
           <ChartTable tracks={tracks} showRank={false} />
         </div>
