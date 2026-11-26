@@ -1,13 +1,12 @@
 /**
- * Diglist a croce — metodo stretto (no pool digger / no dump corde)
+ * Diglist a croce — vedi diglistRoadmap.ts (Fase 1 label / Fase 2 utenti).
  *
- * Dai pick:
- * 1) Discogs discografia stesso artista
- * 2) Discogs roster delle LABEL reali trovate su quei release (Perlon, Cadenza…)
- * 3) iTunes stesso artista
- * 4) co-wishlist community se c’è croce
+ * ORA (Fase 1): pick → label → artisti → altre label → hop (Discogs).
+ * DOPO (Fase 2): 4 tracce in comune con un altro → consigli le sue altre
+ *   (wishlist/collezioni/Bandcamp). Il codice croce wishlist c’è già;
+ *   si alza di priorità quando c’è utenza.
  *
- * Niente lista classici house a caso. Niente cover Topolino (enrich stretto).
+ * Niente dump genere. Niente Topolino.
  */
 
 import { TRACKS } from "../catalog";
@@ -24,6 +23,12 @@ import { scoutDiscogsGraph } from "../live/discogsScout";
 import { scoutItunesArtists } from "../live/itunesArtistScout";
 import { fallbackLabelNetwork } from "../live/labelNetworkFallback";
 import { buyerCollectionsForSeeds, coWishlistedWithSeeds } from "../wishlist";
+import {
+  DIGLIST_PHASE,
+  USER_CROCE_MIN_SHARED,
+  USER_CROCE_STRONG_SHARED,
+  diglistPhaseNote,
+} from "./diglistRoadmap";
 
 export type DigSocialMode = "short" | "long" | "station";
 
@@ -274,7 +279,9 @@ export async function runDiglistSocial(
     seedLinks = 0,
   ) => bumpHit(hits, track, addScore, reason, croce, seedLinks, seeds, ownedKeys);
 
-  // ——— 4–6 community wishlist = supporters proxy ———
+  // ——— Croce utenti (Fase 2): già agganciata — sale di peso con l’utenza ———
+  // Esempio: 4 tracce in comune con un altro → consigli le sue altre.
+  let userCroceHits = 0;
   try {
     const co = await coWishlistedWithSeeds(
       seeds.map((s) => s.id),
@@ -282,12 +289,20 @@ export async function runDiglistSocial(
     );
     for (const row of co) {
       const croce = row.seed_hits;
+      if (croce < USER_CROCE_MIN_SHARED) continue;
+      userCroceHits += 1;
+      const strong = croce >= USER_CROCE_STRONG_SHARED;
+      // In Fase 2 questi score stanno sopra la rete label; ora riempiono se ci sono dati
       const score =
-        croce * 80 + row.shared_fans * 25 + (croce >= 2 ? 60 : 0);
+        (DIGLIST_PHASE === 2 ? 200 : 80) * croce +
+        row.shared_fans * 25 +
+        (strong ? 120 : 60);
       bump(
         row.track,
         score,
-        croce >= 2 ? `croce×${croce} wishlist` : "co-wishlist",
+        strong
+          ? `croce×${croce} wishlist (autostrada)`
+          : `croce×${croce} wishlist`,
         row.shared_fans,
         croce,
       );
@@ -303,16 +318,29 @@ export async function runDiglistSocial(
   try {
     const cols = await buyerCollectionsForSeeds(seeds.map((s) => s.id));
     buyersUsed = Math.max(buyersUsed, cols.length);
-    for (const col of cols.filter((c) => c.seedHits >= 2).slice(0, cfg.buyers)) {
+    for (const col of cols
+      .filter((c) => c.seedHits >= USER_CROCE_MIN_SHARED)
+      .slice(0, cfg.buyers)) {
       Array.from(col.trackIds).forEach((tid) => {
         const t = TRACKS.find((x) => x.id === tid);
         if (!t) return;
-        bump(t, 70 + col.seedHits * 20, `buyer croce×${col.seedHits}`, 1, col.seedHits);
+        const strong = col.seedHits >= USER_CROCE_STRONG_SHARED;
+        bump(
+          t,
+          (DIGLIST_PHASE === 2 ? 160 : 70) + col.seedHits * 20,
+          strong
+            ? `buyer croce×${col.seedHits} (autostrada)`
+            : `buyer croce×${col.seedHits}`,
+          1,
+          col.seedHits,
+        );
       });
     }
   } catch {
     /* ignore */
   }
+
+  void userCroceHits;
 
   if (bandcampLive && profile) {
     void loadFanLibrary;
@@ -418,15 +446,16 @@ export async function runDiglistSocial(
 
   const audioActive = options.audioCompare === true;
   const src = bandcampLive
-    ? "Bandcamp live"
+    ? `Bandcamp live · ${networkNote || "rete label"}`
     : networkNote || "rete Discogs artista→label→artisti→label";
 
   return {
     tracks: ranked,
     bandcampLive,
     audioActive,
-    method: "diglist-label-network",
-    note: `${mode} · ${ranked.length} dig · ${src}${audioActive ? "" : " · audio off"}`,
+    method:
+      DIGLIST_PHASE === 2 ? "diglist-user-croce+label" : "diglist-label-network",
+    note: `${mode} · ${ranked.length} dig · ${diglistPhaseNote()} · ${src}${audioActive ? "" : " · audio off"}`,
     stats: {
       owned: ownedKeys.size,
       buyersUsed: Math.min(buyersUsed, cfg.buyers) || buyersUsed,
