@@ -38,10 +38,10 @@ async function stationPayload(seed: Track, body: {
     ownedLocal: owned,
   });
 
-  // Enrich leggero — station non deve esplodere iTunes
+  // Preview sulle copertine Station
   const tracks = await enrichPreviews(
-    result.tracks.slice(0, 4).map((h) => h.track),
-    3,
+    result.tracks.slice(0, 16).map((h) => h.track),
+    4,
   );
   const byId = new Map(tracks.map((t) => [t.id, t]));
   const merged = result.tracks.map((h) => byId.get(h.track.id) ?? h.track);

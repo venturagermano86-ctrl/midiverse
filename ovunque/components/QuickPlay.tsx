@@ -10,20 +10,23 @@ import {
 type Props = {
   src?: string | null;
   title?: string;
-  /** Se manca src, risolvi preview da artist+title (consigliati). */
+  /** Se manca src, risolvi preview da artist+title (consigliati / dig). */
   artist?: string;
 };
 
 const previewCache = new Map<string, string>();
+const missCache = new Set<string>();
 
 /** Player rapido 1-click — un solo audio globale; risolve preview se manca. */
 export function QuickPlay({ src, title, artist }: Props) {
   const [resolved, setResolved] = useState<string | null>(src ?? null);
   const [playing, setPlaying] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [miss, setMiss] = useState(false);
 
   useEffect(() => {
     setResolved(src ?? null);
+    setMiss(false);
   }, [src]);
 
   useEffect(() => {
@@ -40,12 +43,17 @@ export function QuickPlay({ src, title, artist }: Props) {
     if (src) return src;
     if (!artist || !title) return null;
     const key = `${artist}::${title}`.toLowerCase();
+    if (missCache.has(key)) {
+      setMiss(true);
+      return null;
+    }
     const cached = previewCache.get(key);
     if (cached) {
       setResolved(cached);
       return cached;
     }
     setLoading(true);
+    setMiss(false);
     try {
       const res = await fetch(
         `/api/live/preview?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}`,
@@ -56,8 +64,10 @@ export function QuickPlay({ src, title, artist }: Props) {
         setResolved(data.previewUrl as string);
         return data.previewUrl as string;
       }
+      missCache.add(key);
+      setMiss(true);
     } catch {
-      /* ignore */
+      setMiss(true);
     } finally {
       setLoading(false);
     }
@@ -69,7 +79,7 @@ export function QuickPlay({ src, title, artist }: Props) {
   if (!canTry) {
     return (
       <span
-        className="inline-grid h-9 w-9 place-items-center rounded-full border border-line text-[0.65rem] text-muted"
+        className="inline-grid h-9 w-9 place-items-center rounded-full border border-line bg-ink/70 text-[0.65rem] text-muted"
         title="Nessuna preview"
       >
         —
@@ -93,10 +103,13 @@ export function QuickPlay({ src, title, artist }: Props) {
       }}
       aria-label={playing ? `Stop ${title ?? ""}` : `Play ${title ?? ""}`}
       aria-pressed={playing}
-      className={`inline-grid h-9 w-9 place-items-center rounded-full text-sm font-black transition ${
+      title={miss ? "Preview non trovata" : playing ? "Stop" : "Play"}
+      className={`inline-grid h-9 w-9 place-items-center rounded-full text-sm font-black shadow-md transition ${
         playing
           ? "bg-signal text-ink"
-          : "border border-signal/50 text-signal hover:bg-signal hover:text-ink"
+          : miss
+            ? "border border-line bg-ink/70 text-muted"
+            : "border border-signal/60 bg-ink/75 text-signal hover:bg-signal hover:text-ink"
       } ${loading ? "opacity-60" : ""}`}
     >
       {loading ? "…" : playing ? "■" : "▶"}

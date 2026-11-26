@@ -68,10 +68,10 @@ export async function POST(req: Request) {
       audioCompare: body.audioCompare === true,
     });
 
-    // Enrich leggero: Short non deve andare Offline per iTunes lento
-    const enrichN = mode === "long" ? 6 : 4;
+    // Preview su più dig (Deezer+iTunes) — player sulle copertine
+    const enrichN = mode === "long" ? 24 : 16;
     const toEnrich = result.tracks.slice(0, enrichN).map((h) => h.track);
-    const enriched = await enrichPreviews(toEnrich, 3);
+    const enriched = await enrichPreviews(toEnrich, 4);
     const enrichedById = new Map(enriched.map((t) => [t.id, t]));
     const tracks = result.tracks.map((h) => enrichedById.get(h.track.id) ?? h.track);
 

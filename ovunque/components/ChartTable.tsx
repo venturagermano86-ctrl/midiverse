@@ -31,7 +31,6 @@ export function ChartTable({ tracks, showRank = true }: Props) {
         <thead>
           <tr className="border-b border-line bg-panel text-[0.65rem] uppercase tracking-[0.16em] text-muted">
             {showRank ? <th className="w-10 px-2 py-3 font-semibold">#</th> : null}
-            <th className="w-12 px-2 py-3 font-semibold">Play</th>
             <th className="px-3 py-3 font-semibold">Artist / Title</th>
             <th className="hidden px-3 py-3 font-semibold md:table-cell">Label</th>
             <th className="px-3 py-3 font-semibold text-right">Digi</th>
@@ -56,22 +55,29 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                     {i + 1}
                   </td>
                 ) : null}
-                <td className="px-2 py-3">
-                  <QuickPlay
-                    src={track.previewUrl}
-                    title={track.title}
-                    artist={track.artist}
-                  />
-                </td>
                 <td className="px-3 py-3">
-                  <Link href={`/traccia/${track.id}`} className="flex items-center gap-3">
-                    <CoverArt
-                      hue={track.coverHue}
-                      title={track.title}
-                      artworkUrl={track.artworkUrl}
-                      className="h-12 w-12 shrink-0"
-                    />
-                    <span className="min-w-0">
+                  <div className="flex items-center gap-3">
+                    <div className="relative h-14 w-14 shrink-0 overflow-hidden border border-line">
+                      <Link href={`/traccia/${track.id}`} className="block">
+                        <CoverArt
+                          hue={track.coverHue}
+                          title={track.title}
+                          artworkUrl={track.artworkUrl}
+                          className="h-14 w-14"
+                        />
+                      </Link>
+                      <div className="absolute left-0.5 top-0.5 z-10 scale-90">
+                        <HeartWish track={track} />
+                      </div>
+                      <div className="absolute bottom-0.5 right-0.5 z-10 scale-90">
+                        <QuickPlay
+                          src={track.previewUrl}
+                          title={track.title}
+                          artist={track.artist}
+                        />
+                      </div>
+                    </div>
+                    <Link href={`/traccia/${track.id}`} className="min-w-0">
                       <span className="block truncate text-xs font-semibold uppercase tracking-wide text-soft">
                         {track.artist}
                       </span>
@@ -84,8 +90,8 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                           {track.wishlistSaves === 1 ? "" : "s"}
                         </span>
                       ) : null}
-                    </span>
-                  </Link>
+                    </Link>
+                  </div>
                 </td>
                 <td className="hidden px-3 py-3 text-muted md:table-cell">
                   <span className="block max-w-[10rem] truncate">{track.label}</span>
@@ -136,7 +142,6 @@ export function ChartTable({ tracks, showRank = true }: Props) {
                 </td>
                 <td className="px-2 py-3 text-right">
                   <div className="flex flex-wrap items-center justify-end gap-1.5">
-                    <HeartWish track={track} />
                     <StationButton track={track} compact />
                   </div>
                 </td>

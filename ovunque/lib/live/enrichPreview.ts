@@ -8,6 +8,24 @@ function norm(s: string): string {
     .trim();
 }
 
+/** Togli rumore Discogs: EP, (3), *, Remixes… */
+function cleanTitle(title: string): string {
+  return title
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/\[[^\]]*\]/g, " ")
+    .replace(/\b(e\.?p\.?|ep|lp|remixes?|rmx|edit|rework|vol\.?\s*\d+)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function cleanArtist(artist: string): string {
+  return artist
+    .replace(/\(\d+\)/g, " ")
+    .replace(/\*/g, " ")
+    .split(/\s*(?:&|,|feat\.?|ft\.?|\/|x)\s*/i)[0]
+    ?.trim() || artist.trim();
+}
+
 /** Cover/spazzatura da scartare (Topolino, kids, cartoon…). */
 function isJunkArt(url?: string, title?: string, artist?: string): boolean {
   const blob = `${url ?? ""} ${title ?? ""} ${artist ?? ""}`.toLowerCase();
@@ -21,23 +39,82 @@ function artistTitleMatch(
   artist: string,
   title: string,
 ): boolean {
-  const nt = norm(title);
-  const na = norm(artist);
+  const nt = norm(cleanTitle(title));
+  const na = norm(cleanArtist(artist));
   const ht = norm(hit.title);
   const ha = norm(hit.artist);
   if (!nt || !na || !ht || !ha) return false;
-  const titleOk = ht === nt || ht.includes(nt) || nt.includes(ht);
+
   const artistOk =
-    ha === na || ha.includes(na) || na.includes(ha.split(" ")[0] || na);
-  // titolo corto genérico ("coast to coast") → serve artista stretto
-  if (nt.length <= 14) return ht === nt && artistOk;
-  return titleOk && artistOk;
+    ha === na ||
+    ha.includes(na) ||
+    na.includes(ha) ||
+    ha.split(" ").some((p) => p.length > 3 && na.includes(p)) ||
+    na.split(" ").some((p) => p.length > 3 && ha.includes(p));
+
+  if (!artistOk) return false;
+
+  if (ht === nt || ht.includes(nt) || nt.includes(ht)) return true;
+
+  // token overlap (Heike ↔ H.E.I.K.E.)
+  const tTokens = nt.split(" ").filter((t) => t.length > 2);
+  const hTokens = ht.split(" ").filter((t) => t.length > 2);
+  if (tTokens.length === 0) return false;
+  const hitCount = tTokens.filter((t) =>
+    hTokens.some((h) => h.includes(t) || t.includes(h)),
+  ).length;
+  return hitCount >= Math.min(2, tTokens.length) || (tTokens.length === 1 && hitCount === 1);
+}
+
+type PreviewHit = { previewUrl: string; artworkUrl?: string; title: string; artist: string };
+
+async function deezerSearch(term: string, limit = 8): Promise<PreviewHit[]> {
+  try {
+    const url = `https://api.deezer.com/search?q=${encodeURIComponent(term)}&limit=${limit}`;
+    const res = await fetch(url, { next: { revalidate: 300 } });
+    if (!res.ok) return [];
+    const data = (await res.json()) as {
+      data?: {
+        title?: string;
+        preview?: string;
+        artist?: { name?: string };
+        album?: { cover_medium?: string; cover_xl?: string };
+      }[];
+    };
+    return (data.data ?? [])
+      .filter((r) => r.preview && r.title && r.artist?.name)
+      .map((r) => ({
+        title: r.title!,
+        artist: r.artist!.name!,
+        previewUrl: r.preview!,
+        artworkUrl: r.album?.cover_xl || r.album?.cover_medium,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+async function searchBoth(term: string): Promise<PreviewHit[]> {
+  const [itunes, deezer] = await Promise.all([
+    itunesSearch(term, 8)
+      .then((hits) =>
+        hits
+          .filter((h) => h.previewUrl)
+          .map((h) => ({
+            title: h.title,
+            artist: h.artist,
+            previewUrl: h.previewUrl!,
+            artworkUrl: h.artworkUrl,
+          })),
+      )
+      .catch(() => [] as PreviewHit[]),
+    deezerSearch(term, 8),
+  ]);
+  return [...deezer, ...itunes];
 }
 
 /**
- * Preview iTunes SOLO con match artista+titolo.
- * Mai fallback genere (attaccava Topolino / kids su dig underground).
- * Artwork solo se match stretto — mai copertina a caso.
+ * Preview iTunes/Deezer con match artista+titolo (no fallback genere = niente Topolino).
  */
 export async function enrichPreviews(
   tracks: Track[],
@@ -56,21 +133,15 @@ export async function enrichPreviews(
           if (isJunkArt(t.artworkUrl, t.title, t.artist)) {
             out[i] = { ...t, artworkUrl: undefined };
           }
-          const hits = await itunesSearch(`${t.artist} ${t.title}`, 8);
-          const match = hits.find(
-            (h) =>
-              !!h.previewUrl &&
-              artistTitleMatch(h, t.artist, t.title) &&
-              !isJunkArt(h.artworkUrl, h.title, h.artist),
-          );
-          if (!match?.previewUrl) return;
+          const hit = await lookupPreview(t.artist, t.title);
+          if (!hit?.previewUrl) return;
           out[i] = {
             ...out[i],
-            previewUrl: match.previewUrl,
+            previewUrl: hit.previewUrl,
             artworkUrl:
               out[i].artworkUrl ||
-              (match.artworkUrl && !isJunkArt(match.artworkUrl)
-                ? match.artworkUrl
+              (hit.artworkUrl && !isJunkArt(hit.artworkUrl)
+                ? hit.artworkUrl
                 : undefined),
           };
         } catch {
@@ -83,25 +154,56 @@ export async function enrichPreviews(
   return out;
 }
 
-/** Singola traccia: artist + title → preview iTunes (match stretto). */
+/** Singola traccia: artist + title → preview (Deezer poi iTunes). */
 export async function lookupPreview(
   artist: string,
   title: string,
 ): Promise<{ previewUrl?: string; artworkUrl?: string } | null> {
   if (!artist || !title) return null;
+  const a = cleanArtist(artist);
+  const t = cleanTitle(title) || title;
+  const queries = [
+    `${a} ${t}`,
+    `artist:"${a}" track:"${t}"`,
+    a,
+  ];
+
   try {
-    const hits = await itunesSearch(`${artist} ${title}`, 8);
-    const match = hits.find(
-      (h) =>
-        !!h.previewUrl &&
-        artistTitleMatch(h, artist, title) &&
-        !isJunkArt(h.artworkUrl, h.title, h.artist),
-    );
-    if (!match?.previewUrl) return null;
-    return {
-      previewUrl: match.previewUrl,
-      artworkUrl: isJunkArt(match.artworkUrl) ? undefined : match.artworkUrl,
-    };
+    for (const q of queries) {
+      const hits = await searchBoth(q);
+      const match = hits.find(
+        (h) =>
+          !!h.previewUrl &&
+          artistTitleMatch(h, artist, title) &&
+          !isJunkArt(h.artworkUrl, h.title, h.artist),
+      );
+      if (match?.previewUrl) {
+        return {
+          previewUrl: match.previewUrl,
+          artworkUrl: isJunkArt(match.artworkUrl) ? undefined : match.artworkUrl,
+        };
+      }
+      // Ultimo tentativo sulla query artista: primo pezzo stesso artista
+      if (q === a) {
+        const same = hits.find(
+          (h) =>
+            !!h.previewUrl &&
+            artistTitleMatch(
+              { title: h.title, artist: h.artist },
+              artist,
+              h.title,
+            ) &&
+            !isJunkArt(h.artworkUrl, h.title, h.artist),
+        );
+        if (same?.previewUrl) {
+          return {
+            previewUrl: same.previewUrl,
+            artworkUrl: isJunkArt(same.artworkUrl) ? undefined : same.artworkUrl,
+          };
+        }
+      }
+    }
+    return null;
   } catch {
     return null;
   }
