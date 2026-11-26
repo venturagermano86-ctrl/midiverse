@@ -403,8 +403,8 @@ export async function scoutDiscogsGraph(
   if (!picked.length) return { tracks: [], note: "no seeds", nodes: 0 };
 
   const hops = density === "long" ? 3 : 2;
-  // Short deve chiudere prima del gateway (~45–60s) — Offline se sfori
-  const budgetMs = density === "long" ? 68000 : density === "station" ? 24000 : 28000;
+  // Short sotto gateway published (~25–35s) — Offline se sfori
+  const budgetMs = density === "long" ? 55000 : density === "station" ? 18000 : 20000;
   const deadline = Date.now() + budgetMs;
   const timedOut = () => Date.now() > deadline;
 
@@ -615,8 +615,8 @@ export async function scoutDiscogsGraph(
     .sort((a, b) => bridgePriority(a) - bridgePriority(b))
     .slice(0, density === "long" ? 10 : 6);
   const hopPts = [110, 92, 78];
-  const labelsPerHop = density === "long" ? [8, 8, 6] : [5, 4, 0];
-  const artistsPerHop = density === "long" ? [10, 9, 8] : [6, 5, 0];
+  const labelsPerHop = density === "long" ? [7, 7, 5] : [4, 3, 0];
+  const artistsPerHop = density === "long" ? [9, 8, 6] : [5, 4, 0];
 
   for (let hop = 1; hop <= hops; hop++) {
     if (timedOut()) break;

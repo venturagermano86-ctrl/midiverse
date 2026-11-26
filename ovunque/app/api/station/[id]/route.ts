@@ -38,10 +38,10 @@ async function stationPayload(seed: Track, body: {
     ownedLocal: owned,
   });
 
-  // Preview sulle copertine Station
+  // Enrich leggero — ▶ al click via /api/live/preview
   const tracks = await enrichPreviews(
-    result.tracks.slice(0, 16).map((h) => h.track),
-    4,
+    result.tracks.slice(0, 4).map((h) => h.track),
+    3,
   );
   const byId = new Map(tracks.map((t) => [t.id, t]));
   const merged = result.tracks.map((h) => byId.get(h.track.id) ?? h.track);
@@ -80,12 +80,27 @@ export async function GET(_req: Request, { params }: Ctx) {
   }
 }
 
+const MAX_BODY = 450_000;
+
 export async function POST(req: Request, { params }: Ctx) {
-  const body = (await req.json().catch(() => ({}))) as {
+  const len = Number(req.headers.get("content-length") || 0);
+  if (len > MAX_BODY) {
+    return NextResponse.json({ error: "body_too_large" }, { status: 413 });
+  }
+  const raw = await req.text();
+  if (raw.length > MAX_BODY) {
+    return NextResponse.json({ error: "body_too_large" }, { status: 413 });
+  }
+  let body: {
     track?: Track;
     owned?: Track[];
     bandcampUser?: string;
-  };
+  } = {};
+  try {
+    body = JSON.parse(raw || "{}") as typeof body;
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
   const seed = await resolveSeed(params.id, body.track ?? null);
   if (!seed) {
     return NextResponse.json({ error: "track_not_found" }, { status: 404 });
