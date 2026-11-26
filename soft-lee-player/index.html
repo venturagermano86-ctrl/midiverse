@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Germano Ventura — Cantati</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg0: #140e0c;
+      --ink: #f2e8dc;
+      --mute: #a89080;
+      --line: rgba(242, 232, 220, 0.14);
+      --accent: #d4a070;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: "DM Sans", system-ui, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(900px 500px at 20% 0%, #2a1a14, transparent 60%),
+        linear-gradient(160deg, #140e0c, #1c1410);
+      padding: 1.5rem 1.1rem 2.5rem;
+    }
+    .shell { width: min(440px, 100%); margin: 0 auto; }
+    h1 {
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2.2rem, 8vw, 2.8rem);
+      font-weight: 400;
+      margin: 0 0 0.35rem;
+      line-height: 1;
+    }
+    .eyebrow {
+      font-size: 0.7rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--mute);
+      margin-bottom: 0.4rem;
+    }
+    .lede { color: var(--mute); margin: 0 0 1.4rem; font-size: 0.92rem; }
+    .track {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 0.85rem 0.95rem 0.95rem;
+      margin-bottom: 0.75rem;
+      background: rgba(255,255,255,0.03);
+    }
+    .track h2 { margin: 0 0 0.15rem; font-size: 1rem; }
+    .track p { margin: 0 0 0.65rem; color: var(--mute); font-size: 0.78rem; }
+    audio {
+      width: 100%;
+      height: 44px;
+      display: block;
+    }
+    .hint {
+      margin-top: 1rem;
+      font-size: 0.75rem;
+      color: var(--mute);
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <div class="eyebrow">Germano Ventura</div>
+    <h1>Nina Mood</h1>
+    <p class="lede">Cantati soul · premi play sul telefono</p>
+
+    <article class="track">
+      <h2>3 pack (tutte)</h2>
+      <p>V1 → V2 → V3</p>
+      <audio controls preload="auto" playsinline src="audio/nina-3pack.mp3"></audio>
+    </article>
+
+    <article class="track">
+      <h2>V1</h2>
+      <p>hold me closer…</p>
+      <audio controls preload="metadata" playsinline src="audio/nina-v1.mp3"></audio>
+    </article>
+
+    <article class="track">
+      <h2>V2</h2>
+      <p>fall into the dark…</p>
+      <audio controls preload="metadata" playsinline src="audio/nina-v2.mp3"></audio>
+    </article>
+
+    <article class="track">
+      <h2>V3</h2>
+      <p>carry me home…</p>
+      <audio controls preload="metadata" playsinline src="audio/nina-v3.mp3"></audio>
+    </article>
+
+    <p class="hint">Se in chat non parte l’audio, usa questi play nativi qui. Alza il volume del telefono.</p>
+  </main>
+</body>
+</html>
