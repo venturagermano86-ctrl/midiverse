@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChartTable } from "@/components/ChartTable";
 import { encodeSeedsParam, stashDigPicks } from "@/lib/digPickBag";
-import { parseScreenshotQueries } from "@/lib/screenshotParse";
+import { pickExactTrack } from "@/lib/screenshotExact";
+import { parseScreenshotLines } from "@/lib/screenshotParse";
 import type { Track } from "@/lib/types";
 
 type Mode = "auto" | "artist" | "label";
@@ -91,34 +92,40 @@ export function DigStart({ className = "" }: { className?: string }) {
     try {
       const Tesseract = (await import("tesseract.js")).default;
       const result = await Tesseract.recognize(file, "eng");
-      const found = parseScreenshotQueries(result.data.text || "", 6);
+      const found = parseScreenshotLines(result.data.text || "", 8);
       if (!found.length) {
         setStatus("Screenshot poco chiaro — prova chart/wishlist nitida");
         return;
       }
-      setStatus(`OCR: ${found.length} righe — cerco…`);
+      setStatus(`OCR: ${found.length} tracce — match esatto…`);
       const hits: Track[] = [];
       const seen = new Set<string>();
+      let missed = 0;
+      // Una riga OCR → al massimo UNA traccia (quella nello screen), non simili / rete label
       for (const line of found) {
-        const res = await fetch("/api/live/start", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ q: line, mode: "auto", limit: 4 }),
-        });
+        const res = await fetch(
+          `/api/live/search?q=${encodeURIComponent(line.query)}&limit=16`,
+        );
         const data = await res.json().catch(() => ({}));
-        for (const t of (data.tracks as Track[]) || []) {
-          if (seen.has(t.id)) continue;
-          seen.add(t.id);
-          hits.push(t);
+        const candidates = Array.isArray(data.tracks)
+          ? (data.tracks as Track[])
+          : [];
+        const pick = pickExactTrack(line, candidates);
+        if (!pick) {
+          missed++;
+          continue;
         }
+        if (seen.has(pick.track.id)) continue;
+        seen.add(pick.track.id);
+        hits.push(pick.track);
       }
-      setTracks(hits.slice(0, 28));
-      setKind("screenshot");
-      setPicked(hits.slice(0, 3).map((t) => t.id));
+      setTracks(hits);
+      setKind("screenshot-exact");
+      setPicked(hits.map((t) => t.id).slice(0, 6));
       setStatus(
         hits.length
-          ? `Da screenshot → ${hits.length} dig — Short/Long`
-          : "OCR ok ma nessun catalogo — cerca a mano",
+          ? `Screenshot → ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non trovate` : ""} — Short/Long sulla rete label`
+          : "OCR letto ma nessuna traccia esatta in catalogo — ritaglia meglio o cerca a mano",
       );
     } catch {
       setStatus("OCR fallito — riprova");
@@ -162,7 +169,7 @@ export function DigStart({ className = "" }: { className?: string }) {
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-soft">
         Artista, label, titolo, link YouTube / Bandcamp / Discogs / Beatport / SoundCloud,
-        oppure screenshot. Poi Short/Long sulla rete label.
+        oppure screenshot (trova quella traccia, non simili). Poi Short/Long sulla rete label.
       </p>
 
       <div className="mt-4 flex flex-wrap gap-1.5">
