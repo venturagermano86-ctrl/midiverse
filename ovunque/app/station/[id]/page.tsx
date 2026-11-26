@@ -16,6 +16,7 @@ import { getBandcampUsername } from "@/lib/bandcampProfile";
 import {
   getPlayingSrc,
   playPreview,
+  setPlayQueue,
   stopPreview,
   subscribePreview,
   subscribePreviewEnded,
@@ -72,6 +73,17 @@ export default function StationPage() {
           setItems(data.items);
           setNote(data.note || "Station · Diglist croce (stesso motore Short/Long)");
           setCursor(0);
+          const q = (data.items as StationRow[])
+            .map((row) => row.track)
+            .filter((t) => t.previewUrl)
+            .map((t) => ({
+              id: t.id,
+              title: t.title,
+              artist: t.artist,
+              previewUrl: t.previewUrl!,
+              artworkUrl: t.artworkUrl,
+            }));
+          setPlayQueue(q, 0);
         } else {
           setNote("Station non disponibile per questa traccia.");
         }
@@ -110,7 +122,11 @@ export default function StationPage() {
         setPlaying(false);
         return;
       }
-      const on = await playPreview(src, row.track.id);
+      const on = await playPreview(src, row.track.id, {
+        title: row.track.title,
+        artist: row.track.artist,
+        artworkUrl: row.track.artworkUrl,
+      });
       setPlaying(on);
     },
     [items],

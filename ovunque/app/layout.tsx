@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Archivo } from "next/font/google";
+import { BottomPlayer } from "@/components/BottomPlayer";
 import { CollectionProvider } from "@/components/CollectionProvider";
 import { SiteHeader } from "@/components/SiteHeader";
 import "./globals.css";
@@ -23,8 +24,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className={`${archivo.className} atmosphere antialiased`}>
         <CollectionProvider>
           <SiteHeader />
-          {children}
-          <footer className="mt-20 border-t border-line px-5 py-10 text-sm text-muted md:px-10">
+          <div className="pb-28">{children}</div>
+          <footer className="mt-20 border-t border-line px-5 py-10 pb-32 text-sm text-muted md:px-10">
             <p className="font-display text-sm font-black uppercase tracking-[0.14em] text-mist">
               Dig List
             </p>
@@ -41,6 +42,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               . powered by <span className="font-black tracking-wider text-signal">MIDIVRS</span>
             </p>
           </footer>
+          <BottomPlayer />
         </CollectionProvider>
       </body>
     </html>

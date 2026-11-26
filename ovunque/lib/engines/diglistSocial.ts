@@ -12,7 +12,7 @@
 import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
 import type { Track } from "../types";
-import { isClubDig } from "./clubFilter";
+import { isClubDig, isHardOffLane } from "./clubFilter";
 import {
   loadBandcampProfile,
   loadFanLibrary,
@@ -221,9 +221,14 @@ function bumpHit(
   if (seeds.length && isSeedOrOwned(track, seeds, ownedKeys)) return;
   if (seeds.length && !isCorrelated(seeds, track, reason)) return;
   const seedHints = seeds.map((s) => s.artist);
-  // Rete label (Discogs o curata) già filtrata — non rifilare a 0 dig
+  if (isHardOffLane(track)) return; // reggae / fuori lane sempre fuori
+  // Rete label: ancora club check (evita reggae/jazz su hop larghi)
   const fromNetwork = /rete:|rete curata|label mate|network/i.test(reason);
-  if (!fromNetwork && !isClubDig(track, seedHints)) return;
+  if (!isClubDig(track, seedHints) && !fromNetwork) return;
+  if (fromNetwork && !isClubDig(track, seedHints) && !/rete curata/i.test(reason)) {
+    // Discogs hop: se non club, scarta (curata All Inn/Perlon resta)
+    return;
+  }
   const key = itemKey(track.artist, track.title);
   const prev = map.get(key);
   if (!prev) {
@@ -465,17 +470,17 @@ export async function runDiglistSocial(
   let ranked = Array.from(hits.values())
     .filter((h) => h.score >= 70)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
+    .filter((h) => !isHardOffLane(h.track)) // no reggae / fuori lane
     .filter((h) => {
-      const fromNetwork = /rete:|rete curata|label mate|network/i.test(
-        h.reasons.join(" "),
-      );
-      return fromNetwork || isClubDig(h.track, seedHints);
+      const reason = h.reasons.join(" ");
+      const fromCurated = /rete curata/i.test(reason);
+      if (fromCurated) return isClubDig(h.track, seedHints) || !isHardOffLane(h.track);
+      return isClubDig(h.track, seedHints);
     })
-    // Mai lasciare Dance/Electro Pop come unico “dig” (screenshot Sound Synthesis)
     .filter((h) => {
       const g = resolveGenre(h.track.genre);
       if (g.slug === "dance-electro-pop") {
-        return /rete:|rete curata|perlon|all\s*inn|rawax|cadenza/i.test(
+        return /rete curata|perlon|all\s*inn|rawax|cadenza/i.test(
           `${h.reasons.join(" ")} ${h.track.label}`,
         );
       }

@@ -102,7 +102,10 @@ export function QuickPlay({ src, title, artist, trackId }: Props) {
         void (async () => {
           const url = await resolveSrc();
           if (!url) return;
-          const on = await playPreview(url, trackId);
+          const on = await playPreview(url, trackId, {
+            title: title ?? undefined,
+            artist: artist ?? undefined,
+          });
           if (trackId) {
             setPlaying(on || getPlayingId() === trackId);
           } else {
