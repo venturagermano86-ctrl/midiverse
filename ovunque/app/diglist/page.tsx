@@ -43,25 +43,32 @@ function DigListResults() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             seeds,
-            owned: owned.slice(0, 400),
+            owned: owned.slice(0, 80),
             mode,
             bandcampUser: getBandcampUsername() || undefined,
           }),
         });
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (cancelled) return;
         if (!res.ok) {
-          setError(data.error || "Dig list fallita");
+          const err =
+            data.error === "sign_in_required"
+              ? "Apri l’app da Cursor (Private) o metti Team/Public"
+              : data.error === "diglist_failed"
+                ? "Rete Diglist in timeout — riprova Short"
+                : data.error || `Errore ${res.status}`;
+          setError(err);
           return;
         }
         setTracks(data.tracks ?? []);
         setGenres(Array.isArray(data.genres) ? data.genres : []);
         setNote(
           data.note ||
-            "Diglist: acquirenti × collezioni (croce). Genere solo filtri.",
+            "Incroci label: pick → label → artisti → altre label.",
         );
       } catch {
-        if (!cancelled) setError("Offline — riprova.");
+        if (!cancelled)
+          setError("Rete lenta o sessione scaduta — riprova da Open App");
       }
     })();
     return () => {

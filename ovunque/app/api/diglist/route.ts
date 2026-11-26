@@ -10,15 +10,32 @@ import type { Track } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export const maxDuration = 90;
 
-/** Diglist Short/Long — croce buyer×collezioni (genere solo filtri). */
+const MAX_BODY = 450_000; // ~0.45MB — evita body enormi prima del parse
+
+/** Diglist Short/Long — rete label/artista (incroci). */
 export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as {
+  const len = Number(req.headers.get("content-length") || 0);
+  if (len > MAX_BODY) {
+    return NextResponse.json({ error: "body_too_large" }, { status: 413 });
+  }
+
+  const raw = await req.text();
+  if (raw.length > MAX_BODY) {
+    return NextResponse.json({ error: "body_too_large" }, { status: 413 });
+  }
+
+  let body: {
     seeds?: Track[];
     owned?: Track[];
     mode?: DigSocialMode;
     bandcampUser?: string;
     audioCompare?: boolean;
-  };
+  } = {};
+  try {
+    body = JSON.parse(raw || "{}") as typeof body;
+  } catch {
+    return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+  }
 
   const seeds = (body.seeds ?? [])
     .map((t) => sanitizeTrack(t))
@@ -26,9 +43,9 @@ export async function POST(req: Request) {
     .slice(0, 6);
 
   const owned = (body.owned ?? [])
+    .slice(0, 400)
     .map((t) => sanitizeTrack(t))
-    .filter((t): t is Track => !!t?.id && !!t?.title)
-    .slice(0, 400);
+    .filter((t): t is Track => !!t?.id && !!t?.title);
 
   const mode: DigSocialMode =
     body.mode === "long" ? "long" : body.mode === "station" ? "station" : "short";
@@ -51,10 +68,12 @@ export async function POST(req: Request) {
       audioCompare: body.audioCompare === true,
     });
 
-    const tracks = await enrichPreviews(
-      result.tracks.map((h) => h.track),
-      mode === "long" ? 8 : 5,
-    );
+    // Enrich leggero: Short non deve andare Offline per iTunes lento
+    const enrichN = mode === "long" ? 6 : 4;
+    const toEnrich = result.tracks.slice(0, enrichN).map((h) => h.track);
+    const enriched = await enrichPreviews(toEnrich, 3);
+    const enrichedById = new Map(enriched.map((t) => [t.id, t]));
+    const tracks = result.tracks.map((h) => enrichedById.get(h.track.id) ?? h.track);
 
     const genres = Array.from(
       new Set(result.tracks.map((h) => h.genre).filter(Boolean)),
@@ -86,7 +105,11 @@ export async function POST(req: Request) {
       },
       { headers: { "cache-control": "private, no-store" } },
     );
-  } catch {
-    return NextResponse.json({ error: "diglist_failed" }, { status: 500 });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "diglist_failed";
+    return NextResponse.json(
+      { error: "diglist_failed", detail: msg.slice(0, 120) },
+      { status: 500 },
+    );
   }
 }

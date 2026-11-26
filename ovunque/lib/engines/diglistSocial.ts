@@ -129,8 +129,9 @@ function diversify(hits: DigSocialHit[], limit: number): DigSocialHit[] {
     if (seen.has(key)) continue;
     const a = h.track.artist.toLowerCase();
     const l = (h.track.label || "").toLowerCase();
-    if ((perArtist.get(a) ?? 0) >= 4) continue;
-    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 5) continue;
+    // Reti dense (All Inn / Perlon…): più pezzi per label, non un dump genere
+    if ((perArtist.get(a) ?? 0) >= 5) continue;
+    if (l && l !== "—" && (perLabel.get(l) ?? 0) >= 8) continue;
     out.push(h);
     seen.add(key);
     perArtist.set(a, (perArtist.get(a) ?? 0) + 1);
@@ -314,9 +315,15 @@ export async function runDiglistSocial(
     void loadFanLibrary;
   }
 
-  // ——— Discogs RETE: artista → label → roster → hop artisti ———
+  // ——— Discogs RETE: artista → label → roster → altre label (All Inn→Perlon…) ———
+  let networkNote = "";
   try {
-    const dg = await scoutDiscogsGraph(seeds, mode === "long" ? 90 : 55);
+    const dg = await scoutDiscogsGraph(
+      seeds,
+      mode === "long" ? 80 : mode === "station" ? 28 : 48,
+      mode,
+    );
+    networkNote = dg.note;
     dg.tracks.forEach((t, i) => {
       const sameArtist = seeds.some((s) => {
         const names = s.artist
@@ -388,7 +395,7 @@ export async function runDiglistSocial(
   const audioActive = options.audioCompare === true;
   const src = bandcampLive
     ? "Bandcamp live"
-    : "rete Discogs artista→label→artisti";
+    : networkNote || "rete Discogs artista→label→artisti→label";
 
   return {
     tracks: ranked,

@@ -54,7 +54,7 @@ export function isClubDig(track: Track, seedHints: string[] = []): boolean {
 
   // Label da rete digger (Perlon, Dekmantel, Rawax…)
   if (
-    /perlon|cadenza|ostgut|minus|cocoon|m-plant|fxhe|sushitech|alphahouse|sei es drum|playhouse|wagon repair|rawax|dekmantel|raum|frisbee|kompakt|plus.?8|purpose maker|mote[- ]evo|dialect|dial |holding|workshop|fabric/i.test(
+    /perlon|cadenza|ostgut|minus|cocoon|m-plant|fxhe|sushitech|alphahouse|sei es drum|playhouse|wagon repair|rawax|dekmantel|raum|frisbee|kompakt|plus.?8|purpose maker|mote[- ]evo|dialect|dial |holding|workshop|fabric|all\s*inn|castanea|nilla|memento/i.test(
       track.label,
     )
   ) {
