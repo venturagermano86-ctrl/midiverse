@@ -6,10 +6,12 @@ import type { Track } from "@/lib/types";
 type Props = {
   track: Track;
   className?: string;
+  /** Dopo cuore on/off — es. DigStart aggiunge ai seed Short/Long/Station. */
+  onAfterToggle?: (track: Track, wishlisted: boolean) => void;
 };
 
 /** Cuore sulla cover → wishlist. */
-export function HeartWish({ track, className = "" }: Props) {
+export function HeartWish({ track, className = "", onAfterToggle }: Props) {
   const { has, toggle, ready } = useCollection();
   const on = has(track.id);
 
@@ -23,7 +25,9 @@ export function HeartWish({ track, className = "" }: Props) {
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        const next = !on;
         toggle(track);
+        onAfterToggle?.(track, next);
       }}
       className={`inline-grid h-9 w-9 place-items-center rounded-full text-base transition ${
         on

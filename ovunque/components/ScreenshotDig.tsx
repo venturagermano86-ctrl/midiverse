@@ -99,7 +99,7 @@ export function ScreenshotDig({ className = "" }: Props) {
       setTracks(hits);
       setStatus(
         hits.length > 0
-          ? `Screenshot → ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non trovate` : ""}. Ascolta, salva, Short/Long.`
+          ? `Screenshot → ${hits.length} traccia/e esatta/e${missed ? ` · ${missed} non trovate` : ""}. Cuore o seleziona → Short / Long / Station.`
           : "OCR ok ma nessuna traccia esatta in catalogo — ritaglia meglio o cerca a mano.",
       );
     } catch {
@@ -120,9 +120,9 @@ export function ScreenshotDig({ className = "" }: Props) {
         Carica uno screenshot
       </h2>
       <p className="mt-2 max-w-2xl text-sm text-soft">
-        Delle tue tracce (chart, wishlist, Beatport, telefono). Leggiamo i titoli e
-        troviamo <strong className="font-semibold text-mist">quelle tracce</strong>, non
-        simili — l’immagine non lascia il tuo device.
+        Foto o screenshot (chart, wishlist, Beatport). Prima trovi{" "}
+        <strong className="font-semibold text-mist">quelle tracce</strong>; poi cuore o
+        seleziona e si attivano Short / Long / Station — l’immagine resta sul device.
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-3">
