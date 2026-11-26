@@ -124,8 +124,11 @@ export function fallbackLabelNetwork(seeds: Track[], limit = 36): Track[] {
       );
     }
   }
+  // Qualsiasi pick (anche Sound Synthesis / Dance Pop) → apri comunque la rete digger
   if (want.size === 0) {
-    ["all inn", "perlon"].forEach((b) => want.add(b));
+    ["all inn", "perlon", "rawax", "cadenza", "playhouse"].forEach((b) =>
+      want.add(b),
+    );
   }
 
   const score = (r: NetRelease) => {

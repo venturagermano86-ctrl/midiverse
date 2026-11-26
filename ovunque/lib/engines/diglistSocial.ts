@@ -420,6 +420,8 @@ export async function runDiglistSocial(
   }
 
   const seedHints = seeds.map((s) => s.artist);
+  const minDigs = mode === "long" ? 36 : mode === "station" ? 16 : 24;
+
   let ranked = Array.from(hits.values())
     .filter((h) => h.score >= 70)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
@@ -429,10 +431,44 @@ export async function runDiglistSocial(
       );
       return fromNetwork || isClubDig(h.track, seedHints);
     })
+    // Mai lasciare Dance/Electro Pop come unico “dig” (screenshot Sound Synthesis)
+    .filter((h) => {
+      const g = resolveGenre(h.track.genre);
+      if (g.slug === "dance-electro-pop") {
+        return /rete:|rete curata|perlon|all\s*inn|rawax|cadenza/i.test(
+          `${h.reasons.join(" ")} ${h.track.label}`,
+        );
+      }
+      return true;
+    })
     .filter((h) => !/mickey|topolino|disney/i.test(`${h.track.title} ${h.track.artist}`))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
   ranked = diversify(ranked, cfg.out);
+
+  // Mai 1 dig: se la rete è magra, riempi All Inn↔Perlon (anche se Discogs ha dato poco)
+  if (ranked.length < minDigs) {
+    const fb = fallbackLabelNetwork(seeds, minDigs - ranked.length + 8);
+    const have = new Set(ranked.map((h) => itemKey(h.track.artist, h.track.title)));
+    for (const t of fb) {
+      const k = itemKey(t.artist, t.title);
+      if (have.has(k) || isSeedOrOwned(t, seeds, ownedKeys)) continue;
+      ranked.push({
+        track: t,
+        score: 88,
+        croceBuyers: 2,
+        reasons: [`rete curata: ${t.label}`],
+        genre: resolveGenre(t.genre).name,
+        seedLinks: 2,
+      });
+      have.add(k);
+      if (ranked.length >= minDigs) break;
+    }
+    if (!networkNote.includes("curata") && fb.length) {
+      networkNote = `${networkNote || "rete label"} · +curata ${fb.length}`;
+    }
+    ranked = diversify(ranked, cfg.out);
+  }
 
   ranked.forEach((h) => {
     h.genre = resolveGenre(h.track.genre).name;
