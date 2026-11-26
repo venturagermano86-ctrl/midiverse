@@ -17,6 +17,7 @@ import { TRACKS } from "../catalog";
 import { resolveGenre } from "../genres";
 import type { Track } from "../types";
 import { rankByAffinity } from "./affinity";
+import { digsUserWouldBuy } from "./diggerPool";
 import {
   loadBandcampProfile,
   loadFanLibrary,
@@ -110,25 +111,31 @@ function isCorrelated(seeds: Track[], candidate: Track, reason: string): boolean
   // 3) co-wishlist / buyer croce forte
   if (/croce×|co-wishlist|buyer croce/i.test(reason)) return true;
 
-  // 4) cluster digger: solo se STESSO genere del pick (o deep/tech house se pick è house)
-  if (/cluster/i.test(reason)) {
+  // 4) pool digger / cluster: stesse corde (musica che comprerebbe)
+  if (/corde digger|comprerebbe|cluster|digger lane/i.test(reason)) {
     const seedGenres = seeds.map((s) => s.genre.toLowerCase());
     const cg = candidate.genre.toLowerCase();
     if (seedGenres.includes(cg)) return true;
     const seedHouse = seeds.some((s) => resolveGenre(s.genre).familySlug === "house");
     if (
       seedHouse &&
-      /^(house|deep house|tech house)$/i.test(candidate.genre)
+      /^(house|deep house|tech house|acid)$/i.test(candidate.genre)
     ) {
       return true;
     }
-    const seedTechno = seeds.some((s) => resolveGenre(s.genre).familySlug === "techno");
+    const seedTechno = seeds.some(
+      (s) =>
+        resolveGenre(s.genre).familySlug === "techno" ||
+        /minimal|techno/i.test(s.genre),
+    );
     if (
       seedTechno &&
       /^(techno|minimal|hard techno|melodic techno|acid)$/i.test(candidate.genre)
     ) {
       return true;
     }
+    // reason già dice corde digger → ok (lane match fatto a monte)
+    if (/corde digger|comprerebbe/i.test(reason)) return true;
     return false;
   }
 
@@ -396,8 +403,14 @@ export async function runDiglistSocial(
     );
   });
 
+  // ——— Pool digger: dischi che COMPREREBBE (stesse corde dei pick) ———
+  const wouldBuy = digsUserWouldBuy(seeds, mode === "long" ? 36 : 24);
+  wouldBuy.forEach((h) => {
+    bump(h.track, h.score, h.reason, 2, 2);
+  });
+
   let ranked = Array.from(hits.values())
-    .filter((h) => h.score >= 70)
+    .filter((h) => h.score >= 65)
     .filter((h) => isCorrelated(seeds, h.track, h.reasons.join(" ")))
     .sort((a, b) => b.score - a.score || b.croceBuyers - a.croceBuyers);
 
@@ -411,14 +424,14 @@ export async function runDiglistSocial(
   const audioActive = options.audioCompare === true;
   const src = bandcampLive
     ? "Bandcamp live"
-    : "Discogs artist/label + co-wishlist (BC Cloudflare)";
+    : "corde digger + Discogs artist/label (BC Cloudflare)";
 
   return {
     tracks: ranked,
     bandcampLive,
     audioActive,
-    method: "diglist-social-croce",
-    note: `${mode} · ${ranked.length} dig · ${src} · genere solo filtri${audioActive ? "" : " · audio off"}`,
+    method: "diglist-would-buy",
+    note: `${mode} · ${ranked.length} dig che compreresti · ${src} · genere solo filtri${audioActive ? "" : " · audio off"}`,
     stats: {
       owned: ownedKeys.size,
       buyersUsed: Math.min(buyersUsed, cfg.buyers) || buyersUsed,

@@ -279,21 +279,78 @@ export async function scoutDiscogsGraph(
     });
   }
 
-  // Solo artista + label reali — NIENTE search per stile solo
+  // Artista: resolve ID → /artists/{id}/releases (musica che comprerebbe dello stesso nome)
   for (let i = 0; i < seedMeta.length; i++) {
     const meta = seedMeta[i];
 
     for (const artist of meta.artists) {
+      const artistHits = await discogsGet<{
+        results?: { id?: number; title?: string; type?: string }[];
+      }>("/database/search", {
+        q: artist,
+        type: "artist",
+        per_page: "3",
+      });
+      await sleep(220);
+      const artistId = artistHits?.results?.find(
+        (r) =>
+          r.id &&
+          r.title &&
+          r.title.toLowerCase().includes(artist.toLowerCase().slice(0, 8)),
+      )?.id;
+
+      if (artistId) {
+        const rels = await discogsGet<{
+          releases?: {
+            id: number;
+            title?: string;
+            artist?: string;
+            year?: number;
+            thumb?: string;
+            label?: string;
+            type?: string;
+          }[];
+        }>(`/artists/${artistId}/releases`, {
+          per_page: "20",
+          sort: "year",
+          sort_order: "desc",
+        });
+        await sleep(220);
+        for (const r of rels?.releases ?? []) {
+          if (!r.id || r.type === "master") continue;
+          // skip Various / DJ mix oddities with weak artist match
+          const a = (r.artist || artist).trim();
+          if (/^various/i.test(a)) continue;
+          bump(
+            acc,
+            {
+              id: r.id,
+              title: `${a} - ${r.title ?? ""}`,
+              label: r.label ? [r.label] : [],
+              year: r.year ? String(r.year) : undefined,
+              thumb: r.thumb,
+              style: meta.styles,
+              genre: ["Electronic"],
+            },
+            i,
+            95,
+            `artist:${artist}`,
+            meta.styles,
+          );
+        }
+      }
+
+      // fallback search by artist name
       const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
         "/database/search",
         {
           artist,
           type: "release",
-          per_page: "15",
+          per_page: "12",
           genre: "Electronic",
         },
       );
-      await sleep(250);
+      await sleep(220);
       for (const h of data?.results ?? []) {
         bump(acc, h, i, 80, `artist:${artist}`, meta.styles);
       }
@@ -301,18 +358,66 @@ export async function scoutDiscogsGraph(
 
     for (const label of meta.labels) {
       if (!isRealLabel(label)) continue;
+      const labelHits = await discogsGet<{
+        results?: { id?: number; title?: string }[];
+      }>("/database/search", {
+        q: label,
+        type: "label",
+        per_page: "3",
+      });
+      await sleep(220);
+      const labelId = labelHits?.results?.find(
+        (r) =>
+          r.id &&
+          r.title &&
+          r.title.toLowerCase() === label.toLowerCase(),
+      )?.id;
+
+      if (labelId) {
+        const rels = await discogsGet<{
+          releases?: {
+            id: number;
+            title?: string;
+            artist?: string;
+            year?: number;
+            thumb?: string;
+          }[];
+        }>(`/labels/${labelId}/releases`, { per_page: "18" });
+        await sleep(220);
+        for (const r of rels?.releases ?? []) {
+          if (!r.id) continue;
+          const a = (r.artist || "Unknown").trim();
+          if (/^various/i.test(a)) continue;
+          bump(
+            acc,
+            {
+              id: r.id,
+              title: `${a} - ${r.title ?? ""}`,
+              label: [label],
+              year: r.year ? String(r.year) : undefined,
+              thumb: r.thumb,
+              style: meta.styles,
+              genre: ["Electronic"],
+            },
+            i,
+            70,
+            `label:${label}`,
+            meta.styles,
+          );
+        }
+      }
+
       const data = await discogsGet<{ results?: DiscogsSearchHit[] }>(
         "/database/search",
         {
           label,
           type: "release",
-          per_page: "15",
+          per_page: "12",
           genre: "Electronic",
         },
       );
-      await sleep(250);
+      await sleep(220);
       for (const h of data?.results ?? []) {
-        // label mates: devono avere overlap stile se Discogs lo dichiara
         bump(acc, h, i, 60, `label:${label}`, meta.styles);
       }
     }
